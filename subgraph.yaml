@@ -1,0 +1,72 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: Safe
+    network: optimism
+    source:
+      address: "0x5a4B31942d37d564e5cEf4C82340E43fe66686b2"
+      abi: Safe
+      startBlock: 137552250
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - FundingBalance
+      abis:
+        - name: Safe
+          file: ./abis/Safe.json
+        - name: AggregatorV3Interface
+          file: ./abis/AggregatorV3Interface.json
+      eventHandlers:
+        - event: SafeReceived(indexed address,uint256)
+          handler: handleSafeReceived
+        - event: ExecutionSuccess(bytes32,uint256)
+          handler: handleExecutionSuccess
+      file: ./src/funding.ts
+  - kind: ethereum
+    name: USDC_Native
+    network: optimism
+    source:
+      address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
+      abi: ERC20
+      startBlock: 137552250
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - FundingBalance
+      abis:
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: AggregatorV3Interface
+          file: ./abis/AggregatorV3Interface.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleUSDC
+      file: ./src/funding.ts
+  - kind: ethereum
+    name: USDC_Bridged
+    network: optimism
+    source:
+      address: "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"
+      abi: ERC20
+      startBlock: 137552250
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - FundingBalance
+      abis:
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: AggregatorV3Interface
+          file: ./abis/AggregatorV3Interface.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleUSDC
+      file: ./src/funding.ts

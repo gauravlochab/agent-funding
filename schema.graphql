@@ -1,0 +1,14 @@
+type Agent @entity(immutable: false) {
+  id: Bytes!
+  name: String
+  createdBlock: BigInt
+}
+
+type FundingBalance @entity(immutable: false) {
+  id: Bytes!
+  totalInUsd: BigDecimal!
+  totalOutUsd: BigDecimal!
+  netUsd: BigDecimal!
+  firstInTimestamp: BigInt!
+  lastChangeTs: BigInt!
+}

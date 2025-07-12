@@ -94,3 +94,40 @@ export function getEthUsd(_b: ethereum.Block): BigDecimal {
 export function getUsdcUsd(_b: ethereum.Block): BigDecimal {
   return BigDecimal.fromString("1.0")
 }
+
+// Generic USD price function for any token
+export function getUsd(token: Address, block: ethereum.Block): BigDecimal {
+  // For now, we'll implement basic price mapping
+  // In a full implementation, you'd want to add more token price feeds
+  
+  // ETH (wrapped or native)
+  if (token.toHexString().toLowerCase() == "0x4200000000000000000000000000000000000006" || // WETH on Optimism
+      token.toHexString().toLowerCase() == "0x0000000000000000000000000000000000000000") {   // ETH
+    return getEthUsd(block)
+  }
+  
+  // USDC tokens
+  if (token.equals(FUNDING_TOKENS[0]) || token.equals(FUNDING_TOKENS[1])) {
+    return getUsdcUsd(block)
+  }
+  
+  // Default to $1 for unknown tokens (should be extended with more price feeds)
+  log.warning("Unknown token for USD pricing: {}, defaulting to $1", [token.toHexString()])
+  return BigDecimal.fromString("1.0")
+}
+
+// Portfolio refresh function - placeholder for now
+export function refreshPortfolio(agent: Address, block: ethereum.Block): void {
+  // This would aggregate all protocol positions for an agent
+  // For now, we'll just log that it was called
+  log.info("refreshPortfolio called for agent: {} at block: {}", [
+    agent.toHexString(),
+    block.number.toString()
+  ])
+  
+  // In a full implementation, this would:
+  // 1. Load all ProtocolPosition entities for this agent
+  // 2. Sum up the USD values by protocol
+  // 3. Update an AgentPortfolio entity
+  // 4. Save the aggregated data
+}

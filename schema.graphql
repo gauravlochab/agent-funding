@@ -12,3 +12,17 @@ type FundingBalance @entity(immutable: false) {
   firstInTimestamp: BigInt!
   lastChangeTs: BigInt!
 }
+
+type ProtocolPosition @entity(immutable: false) {
+  id: Bytes!                # "<agent>-<tokenId>"
+  agent: Bytes!             @index
+  protocol: String!         @index   # "velodrome-cl"
+  pool: Bytes!
+  usdCurrent: BigDecimal!
+
+  token0: Bytes
+  amount0: BigDecimal
+  token1: Bytes
+  amount1: BigDecimal
+  liquidity: BigInt
+}

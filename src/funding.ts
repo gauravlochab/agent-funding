@@ -29,14 +29,27 @@ export function handleExecutionSuccess(ev: ExecutionSuccess): void {
   updateFunding(to, usd, false, ev.block.timestamp)
 }
 
-// USDC Transfer
+// USDC Transfer - OPTIMIZED VERSION
 export function handleUSDC(ev: Transfer): void {
-  let from = ev.params.from, to = ev.params.to
+  // 🚀 CRITICAL OPTIMIZATION: Quick Safe address check first
+  // This eliminates 99%+ of transfers immediately with minimal computation
+  let safeAddr = "0x5a4b31942d37d564e5cef4c82340e43fe66686b2"
+  let fromHex = ev.params.from.toHexString().toLowerCase()
+  let toHex = ev.params.to.toHexString().toLowerCase()
+  
+  // Early exit if neither address is our Safe
+  if (fromHex != safeAddr && toHex != safeAddr) {
+    return // Skip processing - saves massive amount of computation
+  }
+  
+  // Only process transfers involving our Safe address
+  let from = ev.params.from
+  let to = ev.params.to
   let value = ev.params.value
   let txHash = ev.transaction.hash.toHexString()
   
-  // Log every USDC transfer for debugging
-  log.info("USDC Transfer detected: contract={}, from={}, to={}, value={}, txHash={}", [
+  // Log only relevant USDC transfers now
+  log.info("USDC Transfer involving Safe: contract={}, from={}, to={}, value={}, txHash={}", [
     ev.address.toHexString(),
     from.toHexString(),
     to.toHexString(), 
@@ -44,23 +57,34 @@ export function handleUSDC(ev: Transfer): void {
     txHash
   ])
   
-  // Check if from is funding source
-  let fromIsFundingSource = isFundingSource(from, ev.block, txHash)
-  log.info("From address {} is funding source: {}, txHash={}", [from.toHexString(), fromIsFundingSource.toString(), txHash])
+  // Determine which address is the Safe (we know at least one is)
+  let fromIsSafe = (fromHex == safeAddr)
+  let toIsSafe = (toHex == safeAddr)
   
-  // Check if to is Safe
-  let toIsSafe = isSafe(to, txHash)
-  log.info("To address {} is Safe: {}, txHash={}", [to.toHexString(), toIsSafe.toString(), txHash])
+  // Now do the more expensive funding source checks only when needed
+  let fromIsFundingSource = false
+  let toIsFundingSource = false
   
-  // Check if from is Safe
-  let fromIsSafe = isSafe(from, txHash)
-  log.info("From address {} is Safe: {}, txHash={}", [from.toHexString(), fromIsSafe.toString(), txHash])
+  if (!fromIsSafe) {
+    fromIsFundingSource = isFundingSource(from, ev.block, txHash)
+    log.info("From address {} is funding source: {}, txHash={}", [from.toHexString(), fromIsFundingSource.toString(), txHash])
+  }
   
-  // Check if to is funding source
-  let toIsFundingSource = isFundingSource(to, ev.block, txHash)
-  log.info("To address {} is funding source: {}, txHash={}", [to.toHexString(), toIsFundingSource.toString(), txHash])
+  if (!toIsSafe) {
+    toIsFundingSource = isFundingSource(to, ev.block, txHash)
+    log.info("To address {} is funding source: {}, txHash={}", [to.toHexString(), toIsFundingSource.toString(), txHash])
+  }
   
-  // USDC in to Safe
+  // Log our determinations
+  log.info("Address classifications: fromIsSafe={}, toIsSafe={}, fromIsFundingSource={}, toIsFundingSource={}, txHash={}", [
+    fromIsSafe.toString(),
+    toIsSafe.toString(),
+    fromIsFundingSource.toString(),
+    toIsFundingSource.toString(),
+    txHash
+  ])
+  
+  // USDC in to Safe (from funding source to Safe)
   if (fromIsFundingSource && toIsSafe) {
     log.info("Processing USDC IN: from funding source {} to Safe {}, amount: {}, txHash={}", [
       from.toHexString(),
@@ -74,7 +98,7 @@ export function handleUSDC(ev: Transfer): void {
     log.info("USD value calculated: {}, txHash={}", [usd.toString(), txHash])
     updateFunding(to, usd, true, ev.block.timestamp)
   } 
-  // USDC out from Safe
+  // USDC out from Safe (from Safe to funding source)
   else if (fromIsSafe && toIsFundingSource) {
     log.info("Processing USDC OUT: from Safe {} to funding source {}, amount: {}, txHash={}", [
       from.toHexString(),

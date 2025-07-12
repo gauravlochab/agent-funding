@@ -17,6 +17,12 @@ export const USDC_USD_FEED = Address.fromString("0x16a9FA2FDa030272Ce99B29CF780d
 
 // Safe address for detection
 export const SAFE_ADDRESS = Address.fromString("0x5a4B31942d37d564e5cEf4C82340E43fe66686b2")
+export const SAFE_ADDRESS_HEX = "0x5a4b31942d37d564e5cef4c82340e43fe66686b2" // Lowercase for quick comparison
+
+// 🚀 PERFORMANCE OPTIMIZATION: Ultra-fast Safe address check
+export function isSafeQuick(addr: Address): boolean {
+  return addr.toHexString().toLowerCase() == SAFE_ADDRESS_HEX
+}
 
 export function isWhitelisted(addr: Address, txHash: string = ""): boolean {
   // Convert address to checksum format for proper comparison

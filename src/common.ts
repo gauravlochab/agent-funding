@@ -77,13 +77,14 @@ export function isFundingSource(addr: Address, block: ethereum.Block, txHash: st
 }
 
 export function isSafe(addr: Address, txHash: string = ""): boolean {
-  let result = addr.equals(SAFE_ADDRESS)
-  log.info("isSafe check: address={}, safeAddress={}, result={}, txHash={}", [
-    addr.toHexString(),
-    SAFE_ADDRESS.toHexString(),
-    result.toString(),
-    txHash
+  let addrHex = addr.toHexString().toLowerCase()
+  let safeHex = SAFE_ADDRESS.toHexString().toLowerCase()
+  let result = addrHex == safeHex
+  
+  log.info("🔍 isSafe check: input={}, safe={}, result={}, txHash={}", [
+    addrHex, safeHex, result.toString(), txHash
   ])
+  
   return result
 }
 

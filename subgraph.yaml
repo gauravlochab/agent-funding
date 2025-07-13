@@ -88,14 +88,16 @@ dataSources:
           file: ./abis/NonfungiblePositionManager.json
         - name: VelodromeCLPool
           file: ./abis/VelodromeCLPool.json
+        - name: VelodromeCLFactory
+          file: ./abis/VelodromeCLFactory.json
         - name: AggregatorV3Interface
           file: ./abis/AggregatorV3Interface.json
       eventHandlers:
-        - event: IncreaseLiquidity(indexed uint256,indexed address,uint128,uint256,uint256)
+        - event: IncreaseLiquidity(indexed uint256,uint128,uint256,uint256)
           handler: handleIncreaseLiquidity
-        - event: DecreaseLiquidity(indexed uint256,indexed address,uint128,uint256,uint256)
+        - event: DecreaseLiquidity(indexed uint256,uint128,uint256,uint256)
           handler: handleDecreaseLiquidity
-        - event: Collect(indexed uint256,indexed address,uint256,uint256)
+        - event: Collect(indexed uint256,address,uint256,uint256)
           handler: handleCollect
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleNFTTransfer

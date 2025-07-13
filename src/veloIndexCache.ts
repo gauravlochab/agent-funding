@@ -11,10 +11,11 @@ class PoolNFTCache {
 
   addNFTToPool(poolAddress: Address, tokenId: BigInt): void {
     let poolKey = poolAddress.toHexString()
-    let nfts = this.poolToNFTs.get(poolKey)
+    let nfts: BigInt[] = []
     
-    if (!nfts) {
-      nfts = []
+    // Check if key exists before getting
+    if (this.poolToNFTs.has(poolKey)) {
+      nfts = this.poolToNFTs.get(poolKey)
     }
     
     // Add if not already present
@@ -35,9 +36,10 @@ class PoolNFTCache {
 
   removeNFTFromPool(poolAddress: Address, tokenId: BigInt): void {
     let poolKey = poolAddress.toHexString()
-    let nfts = this.poolToNFTs.get(poolKey)
     
-    if (nfts) {
+    // Check if key exists before getting
+    if (this.poolToNFTs.has(poolKey)) {
+      let nfts = this.poolToNFTs.get(poolKey)
       let newNfts: BigInt[] = []
       for (let i = 0; i < nfts.length; i++) {
         if (!nfts[i].equals(tokenId)) {
@@ -51,8 +53,13 @@ class PoolNFTCache {
 
   getNFTsForPool(poolAddress: Address): BigInt[] {
     let poolKey = poolAddress.toHexString()
-    let nfts = this.poolToNFTs.get(poolKey)
-    return nfts ? nfts : []
+    
+    // Check if key exists before getting
+    if (this.poolToNFTs.has(poolKey)) {
+      return this.poolToNFTs.get(poolKey)
+    }
+    
+    return []
   }
 }
 

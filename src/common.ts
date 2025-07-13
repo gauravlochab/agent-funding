@@ -1,23 +1,22 @@
 import { Address, BigDecimal, ethereum, log } from "@graphprotocol/graph-ts"
 import { AggregatorV3Interface } from "../generated/Safe/AggregatorV3Interface"
+import { 
+  SAFE_ADDRESS, 
+  SAFE_ADDRESS_HEX, 
+  TREASURY_ADDRESSES,
+  USDC_NATIVE,
+  USDC_BRIDGED,
+  ETH_USD_FEED,
+  USDC_USD_FEED
+} from "./config"
 
-// — Whitelist & tokens
-export const WHITELIST: string[] = [
-  "0x20274f94A2d61b04e485ACE1E03FC859Ad73789E"  // Treasury address
-]
+// — Whitelist & tokens (now imported from config)
+export const WHITELIST: string[] = TREASURY_ADDRESSES
 
 export const FUNDING_TOKENS: Address[] = [
-  Address.fromString("0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"), // Native USDC on Optimism
-  Address.fromString("0x7F5c764cBc14f9669B88837ca1490cCa17c31607")  // USDC.e (Bridged) on Optimism
+  USDC_NATIVE, // Native USDC on Optimism
+  USDC_BRIDGED  // USDC.e (Bridged) on Optimism
 ]
-
-// — Chainlink feeds on Optimism
-export const ETH_USD_FEED  = Address.fromString("0x13e3Ee699D1909E989722E753853AE30b17e08c5")
-export const USDC_USD_FEED = Address.fromString("0x16a9FA2FDa030272Ce99B29CF780dFA30361E0f3")
-
-// Safe address for detection
-export const SAFE_ADDRESS = Address.fromString("0x5a4B31942d37d564e5cEf4C82340E43fe66686b2")
-export const SAFE_ADDRESS_HEX = "0x5a4b31942d37d564e5cef4c82340e43fe66686b2" // Lowercase for quick comparison
 
 // 🚀 PERFORMANCE OPTIMIZATION: Ultra-fast Safe address check
 export function isSafeQuick(addr: Address): boolean {

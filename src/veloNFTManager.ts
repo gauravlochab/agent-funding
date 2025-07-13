@@ -5,11 +5,12 @@ import {
   Transfer,
   NonfungiblePositionManager
 } from "../generated/VeloNFTManager/NonfungiblePositionManager"
-import { isSafe, SAFE_ADDRESS } from "./common"
+import { isSafe } from "./common"
+import { SAFE_ADDRESS, VELO_NFT_MANAGER } from "./config"
 import { ensurePoolTemplate, refreshVeloCLPosition, handleNFTTransferForCache } from "./veloCLShared"
 import { log, Address } from "@graphprotocol/graph-ts"
 
-const MANAGER = Address.fromString("0x416b433906b1B72FA758e166e239c43d68dC6F29")
+const MANAGER = VELO_NFT_MANAGER
 
 export function handleNFTTransfer(ev: Transfer): void {
   log.info("🚨 NFT TRANSFER DETECTED: tokenId={}, from={}, to={}, block={}, tx={}", [

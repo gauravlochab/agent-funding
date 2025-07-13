@@ -5,6 +5,7 @@ import {
   isFundingSource, FUNDING_TOKENS,
   getEthUsd, getUsdcUsd, isSafe
 } from "./common"
+import { SAFE_ADDRESS_HEX } from "./config"
 import { updateFunding } from "./helpers"
 
 // ETH in
@@ -33,7 +34,7 @@ export function handleExecutionSuccess(ev: ExecutionSuccess): void {
 export function handleUSDC(ev: Transfer): void {
   // 🚀 CRITICAL OPTIMIZATION: Quick Safe address check first
   // This eliminates 99%+ of transfers immediately with minimal computation
-  let safeAddr = "0x5a4b31942d37d564e5cef4c82340e43fe66686b2"
+  let safeAddr = SAFE_ADDRESS_HEX
   let fromHex = ev.params.from.toHexString().toLowerCase()
   let toHex = ev.params.to.toHexString().toLowerCase()
   

@@ -4,13 +4,16 @@ import { Address, BigInt, log } from "@graphprotocol/graph-ts"
 // This helps the Swap handler know which NFTs to refresh
 class PoolNFTCache {
   private poolToNFTs: Map<string, BigInt[]>
+  private nftToPool: Map<string, string>  // tokenId -> poolAddress for reverse lookup
 
   constructor() {
     this.poolToNFTs = new Map<string, BigInt[]>()
+    this.nftToPool = new Map<string, string>()
   }
 
   addNFTToPool(poolAddress: Address, tokenId: BigInt): void {
     let poolKey = poolAddress.toHexString()
+    let tokenKey = tokenId.toString()
     let nfts: BigInt[] = []
     
     // Check if key exists before getting
@@ -30,12 +33,14 @@ class PoolNFTCache {
     if (!found) {
       nfts.push(tokenId)
       this.poolToNFTs.set(poolKey, nfts)
+      this.nftToPool.set(tokenKey, poolKey)  // Add reverse lookup
       log.info("Added NFT {} to pool {} cache", [tokenId.toString(), poolKey])
     }
   }
 
   removeNFTFromPool(poolAddress: Address, tokenId: BigInt): void {
     let poolKey = poolAddress.toHexString()
+    let tokenKey = tokenId.toString()
     
     // Check if key exists before getting
     if (this.poolToNFTs.has(poolKey)) {
@@ -47,8 +52,14 @@ class PoolNFTCache {
         }
       }
       this.poolToNFTs.set(poolKey, newNfts)
+      this.nftToPool.delete(tokenKey)  // Remove reverse lookup
       log.info("Removed NFT {} from pool {} cache", [tokenId.toString(), poolKey])
     }
+  }
+
+  isNFTInCache(tokenId: BigInt): bool {
+    let tokenKey = tokenId.toString()
+    return this.nftToPool.has(tokenKey)
   }
 
   getNFTsForPool(poolAddress: Address): BigInt[] {
@@ -77,4 +88,17 @@ export function removeAgentNFTFromPool(poolAddress: Address, tokenId: BigInt): v
 
 export function getAgentNFTsInPool(poolAddress: Address): BigInt[] {
   return cache.getNFTsForPool(poolAddress)
+}
+
+export function isSafeOwnedNFT(tokenId: BigInt): bool {
+  // Use the reverse lookup to check if Safe owns this NFT
+  // Since we only track Safe-owned NFTs in the cache, if it's found, Safe owns it
+  
+  log.info("🔍 CACHE CHECK: Checking if Safe owns tokenId: {}", [tokenId.toString()])
+  
+  const isOwned = cache.isNFTInCache(tokenId)
+  
+  log.info("🔍 CACHE RESULT: Safe owns tokenId {}: {}", [tokenId.toString(), isOwned.toString()])
+  
+  return isOwned
 }

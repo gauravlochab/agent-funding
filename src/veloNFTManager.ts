@@ -8,144 +8,74 @@ import {
 import { isSafe } from "./common"
 import { SAFE_ADDRESS, VELO_NFT_MANAGER } from "./config"
 import { ensurePoolTemplate, refreshVeloCLPosition, handleNFTTransferForCache } from "./veloCLShared"
-import { log, Address } from "@graphprotocol/graph-ts"
+import { isSafeOwnedNFT } from "./veloIndexCache"
+import { log, Address, Bytes } from "@graphprotocol/graph-ts"
+import { ProtocolPosition } from "../generated/schema"
 
 const MANAGER = VELO_NFT_MANAGER
 
 export function handleNFTTransfer(ev: Transfer): void {
-  log.info("🚨 NFT TRANSFER DETECTED: tokenId={}, from={}, to={}, block={}, tx={}", [
-    ev.params.tokenId.toString(),
-    ev.params.from.toHexString(), 
-    ev.params.to.toHexString(),
-    ev.block.number.toString(),
-    ev.transaction.hash.toHexString()
-  ])
-  
-  // Check for our specific target NFT
-  if (ev.params.tokenId.toString() == "2894864") {
-    log.warning("🎯 FOUND TARGET NFT 2894864! from={}, to={}", [
-      ev.params.from.toHexString(),
-      ev.params.to.toHexString()
-    ])
-  }
-  
-  log.info("🔄 VELODROME: NFT Transfer event detected - tokenId: {}, from: {}, to: {}", [
-    ev.params.tokenId.toString(),
-    ev.params.from.toHexString(),
-    ev.params.to.toHexString()
-  ])
-
   const incoming = isSafe(ev.params.to)
   const outgoing = isSafe(ev.params.from)
 
-  log.info("🔍 SAFE CHECK RESULTS: incoming={}, outgoing={}, safeAddr={}", [
-    incoming.toString(),
-    outgoing.toString(),
-    SAFE_ADDRESS.toHexString()
-  ])
-
   if (!incoming && !outgoing) {
-    log.info("❌ VELODROME: Skipping NFT Transfer - neither from nor to is Safe", [])
     return
   }
 
   if (incoming) {
-    log.info("📥 VELODROME: NFT Transfer TO Safe - tokenId: {}, creating pool template", [ev.params.tokenId.toString()])
     ensurePoolTemplate(ev.params.tokenId)
   }
   
   if (outgoing) {
-    log.info("📤 VELODROME: NFT Transfer FROM Safe - tokenId: {}", [ev.params.tokenId.toString()])
+    // Mark position as closed when NFT is transferred out
+    const positionId = ev.params.from.toHex() + "-" + ev.params.tokenId.toString()
+    const id = Bytes.fromHexString(positionId)
+    let position = ProtocolPosition.load(id)
+    
+    if (position && position.isActive) {
+      position.isActive = false
+      position.exitTxHash = ev.transaction.hash
+      position.exitTimestamp = ev.block.timestamp
+      // Keep current amounts as final amounts
+      position.exitAmount0 = position.amount0
+      position.exitAmount0USD = position.amount0USD
+      position.exitAmount1 = position.amount1
+      position.exitAmount1USD = position.amount1USD
+      position.exitAmountUSD = position.usdCurrent
+      
+      position.save()
+    }
   }
   
   // Update cache
   handleNFTTransferForCache(ev.params.tokenId, ev.params.from, ev.params.to)
   
-  log.info("🔄 VELODROME: Refreshing position for tokenId: {}", [ev.params.tokenId.toString()])
-  refreshVeloCLPosition(ev.params.tokenId, ev.block)
+  refreshVeloCLPosition(ev.params.tokenId, ev.block, ev.transaction.hash)
 }
 
 export function handleIncreaseLiquidity(ev: IncreaseLiquidity): void {
-  log.info("🚨 INCREASE LIQUIDITY DETECTED: tokenId={}, liquidity={}, block={}", [
-    ev.params.tokenId.toString(),
-    ev.params.liquidity.toString(),
-    ev.block.number.toString()
-  ])
+  // PHASE 1 OPTIMIZATION: Use cache instead of ownerOf() RPC call
+  const isSafeOwned = isSafeOwnedNFT(ev.params.tokenId)
   
-  if (ev.params.tokenId.toString() == "2894864") {
-    log.warning("🎯 FOUND TARGET NFT 2894864 IN INCREASE LIQUIDITY!", [])
-  }
-  
-  // Get the owner from the NFT contract
-  const mgr = NonfungiblePositionManager.bind(MANAGER)
-  const ownerResult = mgr.try_ownerOf(ev.params.tokenId)
-  
-  if (ownerResult.reverted) {
-    log.error("❌ VELODROME: Failed to get owner for tokenId: {}", [ev.params.tokenId.toString()])
-    return
-  }
-  
-  const owner = ownerResult.value
-  log.info("🔍 VELODROME: IncreaseLiquidity owner check - tokenId: {}, owner: {}", [
-    ev.params.tokenId.toString(),
-    owner.toHexString()
-  ])
-  
-  if (isSafe(owner)) {
-    log.info("✅ VELODROME: Processing IncreaseLiquidity for Safe - tokenId: {}", [ev.params.tokenId.toString()])
-    refreshVeloCLPosition(ev.params.tokenId, ev.block)
-  } else {
-    log.info("❌ VELODROME: Skipping IncreaseLiquidity - not Safe owner: {}", [owner.toHexString()])
+  if (isSafeOwned) {
+    refreshVeloCLPosition(ev.params.tokenId, ev.block, ev.transaction.hash)
   }
 }
 
 export function handleDecreaseLiquidity(ev: DecreaseLiquidity): void {
-  log.info("🚨 DECREASE LIQUIDITY DETECTED: tokenId={}, liquidity={}", [
-    ev.params.tokenId.toString(),
-    ev.params.liquidity.toString()
-  ])
+  // PHASE 1 OPTIMIZATION: Use cache instead of ownerOf() RPC call
+  const isSafeOwned = isSafeOwnedNFT(ev.params.tokenId)
   
-  // Get the owner from the NFT contract
-  const mgr = NonfungiblePositionManager.bind(MANAGER)
-  const ownerResult = mgr.try_ownerOf(ev.params.tokenId)
-  
-  if (ownerResult.reverted) {
-    log.error("❌ VELODROME: Failed to get owner for tokenId: {}", [ev.params.tokenId.toString()])
-    return
-  }
-  
-  const owner = ownerResult.value
-  
-  if (isSafe(owner)) {
-    log.info("✅ VELODROME: Processing DecreaseLiquidity for Safe - tokenId: {}", [ev.params.tokenId.toString()])
-    refreshVeloCLPosition(ev.params.tokenId, ev.block)
-  } else {
-    log.info("❌ VELODROME: Skipping DecreaseLiquidity - not Safe owner: {}", [owner.toHexString()])
+  if (isSafeOwned) {
+    refreshVeloCLPosition(ev.params.tokenId, ev.block, ev.transaction.hash)
   }
 }
 
 export function handleCollect(ev: Collect): void {
-  log.info("🚨 COLLECT DETECTED: tokenId={}, amount0={}, amount1={}", [
-    ev.params.tokenId.toString(),
-    ev.params.amount0.toString(),
-    ev.params.amount1.toString()
-  ])
+  // PHASE 1 OPTIMIZATION: Use cache instead of ownerOf() RPC call
+  const isSafeOwned = isSafeOwnedNFT(ev.params.tokenId)
   
-  // Get the owner from the NFT contract  
-  const mgr = NonfungiblePositionManager.bind(MANAGER)
-  const ownerResult = mgr.try_ownerOf(ev.params.tokenId)
-  
-  if (ownerResult.reverted) {
-    log.error("❌ VELODROME: Failed to get owner for tokenId: {}", [ev.params.tokenId.toString()])
-    return
-  }
-  
-  const owner = ownerResult.value
-  
-  if (isSafe(owner)) {
-    log.info("✅ VELODROME: Processing Collect for Safe - tokenId: {}", [ev.params.tokenId.toString()])
-    refreshVeloCLPosition(ev.params.tokenId, ev.block)
-  } else {
-    log.info("❌ VELODROME: Skipping Collect - not Safe owner: {}", [owner.toHexString()])
+  if (isSafeOwned) {
+    refreshVeloCLPosition(ev.params.tokenId, ev.block, ev.transaction.hash)
   }
 }

@@ -4,6 +4,12 @@ type Agent @entity(immutable: false) {
   createdBlock: BigInt
 }
 
+type AddressType @entity(immutable: false) {
+  id: Bytes!           # The address itself
+  isContract: Boolean! # true = contract, false = EOA
+  checkedAt: BigInt!   # Block number when first checked
+}
+
 type FundingBalance @entity(immutable: false) {
   id: Bytes!
   totalInUsd: BigDecimal!
@@ -18,11 +24,43 @@ type ProtocolPosition @entity(immutable: false) {
   agent: Bytes!             @index
   protocol: String!         @index   # "velodrome-cl"
   pool: Bytes!
-  usdCurrent: BigDecimal!
-
+  
+  # Position status
+  isActive: Boolean!        # true = open, false = closed
+  
+  # Current state (only updated for active positions)
+  usdCurrent: BigDecimal!   # Total USD value
   token0: Bytes
-  amount0: BigDecimal
+  amount0: BigDecimal       # Current token0 amount
+  amount0USD: BigDecimal!   # Current USD value of token0
   token1: Bytes
-  amount1: BigDecimal
+  amount1: BigDecimal       # Current token1 amount  
+  amount1USD: BigDecimal!   # Current USD value of token1
   liquidity: BigInt
+  
+  # Velodrome-specific
+  tokenId: BigInt!          # NFT token ID
+  
+  # Static position metadata (cached to avoid RPC calls)
+  tickLower: Int!           # Lower tick boundary (never changes)
+  tickUpper: Int!           # Upper tick boundary (never changes)
+  tickSpacing: Int!         # Tick spacing for the pool (never changes)
+  
+  # Entry tracking
+  entryTxHash: Bytes!       # Transaction hash when position opened
+  entryTimestamp: BigInt!   # Block timestamp when opened
+  entryAmount0: BigDecimal! # Initial token0 amount
+  entryAmount0USD: BigDecimal! # Initial USD value of token0
+  entryAmount1: BigDecimal! # Initial token1 amount
+  entryAmount1USD: BigDecimal! # Initial USD value of token1
+  entryAmountUSD: BigDecimal! # Total initial USD value
+  
+  # Exit tracking (set when position closes)
+  exitTxHash: Bytes         # Transaction hash when position closed
+  exitTimestamp: BigInt     # Block timestamp when closed
+  exitAmount0: BigDecimal   # Final token0 amount withdrawn
+  exitAmount0USD: BigDecimal # Final USD value of token0 at closure
+  exitAmount1: BigDecimal   # Final token1 amount withdrawn
+  exitAmount1USD: BigDecimal # Final USD value of token1 at closure
+  exitAmountUSD: BigDecimal # Total final USD value at closure
 }

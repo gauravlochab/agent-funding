@@ -1,5 +1,6 @@
 import { Address, BigDecimal, ethereum, log } from "@graphprotocol/graph-ts"
 import { AggregatorV3Interface } from "../generated/Safe/AggregatorV3Interface"
+import { AddressType } from "../generated/schema"
 import { 
   SAFE_ADDRESS, 
   SAFE_ADDRESS_HEX, 
@@ -36,13 +37,6 @@ export function isWhitelisted(addr: Address, txHash: string = ""): boolean {
     }
   }
   
-  log.info("isWhitelisted check: address={}, checksumAddr={}, result={}, whitelist={}, txHash={}", [
-    addr.toHex(),
-    checksumAddr,
-    result.toString(),
-    WHITELIST.join(","),
-    txHash
-  ])
   return result
 }
 
@@ -51,27 +45,38 @@ export function isEOA(addr: Address, block: ethereum.Block, txHash: string = "")
   let hasCode = ethereum.hasCode(addr).inner
   let isEOA = !hasCode // Invert: hasCode=true means contract, so isEOA=false
   
-  log.info("isEOA check: address={}, hasCode={}, isEOA={}, txHash={}", [
-    addr.toHexString(),
-    hasCode.toString(),
-    isEOA.toString(),
-    txHash
-  ])
+  return isEOA
+}
+
+// 🚀 PERFORMANCE OPTIMIZATION: Cached EOA check to avoid repeated RPC calls
+export function isEOACached(addr: Address, block: ethereum.Block, txHash: string = ""): boolean {
+  let addressId = addr
+  let addressType = AddressType.load(addressId)
+  
+  if (addressType != null) {
+    // Cache hit - return stored result (fast DB read)
+    let isEOA = !addressType.isContract
+    return isEOA
+  }
+  
+  // Cache miss - check blockchain and store result (one-time RPC call)
+  let hasCode = ethereum.hasCode(addr).inner
+  let isContract = hasCode
+  let isEOA = !isContract
+  
+  // Create and save cache entry
+  addressType = new AddressType(addressId)
+  addressType.isContract = isContract ? true : false
+  addressType.checkedAt = block.number
+  addressType.save()
   
   return isEOA
 }
 
 export function isFundingSource(addr: Address, block: ethereum.Block, txHash: string = ""): boolean {
   let whitelisted = isWhitelisted(addr, txHash)
-  let eoa = isEOA(addr, block, txHash)
+  let eoa = isEOACached(addr, block, txHash) // 🚀 Using cached version for performance
   let result = whitelisted || eoa
-  log.info("isFundingSource check: address={}, whitelisted={}, eoa={}, result={}, txHash={}", [
-    addr.toHexString(),
-    whitelisted.toString(),
-    eoa.toString(),
-    result.toString(),
-    txHash
-  ])
   return result
 }
 
@@ -79,10 +84,6 @@ export function isSafe(addr: Address, txHash: string = ""): boolean {
   let addrHex = addr.toHexString().toLowerCase()
   let safeHex = SAFE_ADDRESS.toHexString().toLowerCase()
   let result = addrHex == safeHex
-  
-  log.info("🔍 isSafe check: input={}, safe={}, result={}, txHash={}", [
-    addrHex, safeHex, result.toString(), txHash
-  ])
   
   return result
 }
@@ -125,12 +126,6 @@ export function getUsd(token: Address, block: ethereum.Block): BigDecimal {
 // Portfolio refresh function - placeholder for now
 export function refreshPortfolio(agent: Address, block: ethereum.Block): void {
   // This would aggregate all protocol positions for an agent
-  // For now, we'll just log that it was called
-  log.info("refreshPortfolio called for agent: {} at block: {}", [
-    agent.toHexString(),
-    block.number.toString()
-  ])
-  
   // In a full implementation, this would:
   // 1. Load all ProtocolPosition entities for this agent
   // 2. Sum up the USD values by protocol

@@ -7,10 +7,14 @@
     "deploy": "graph deploy",
     "create-local": "graph create --node http://localhost:8020/ agent-funding",
     "remove-local": "graph remove --node http://localhost:8020/ agent-funding",
-    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 agent-funding"
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 agent-funding",
+    "test": "graph test"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "0.69.0",
     "@graphprotocol/graph-ts": "^0.38.1"
+  },
+  "devDependencies": {
+    "matchstick-as": "^0.6.0"
   }
 }

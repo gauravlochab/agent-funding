@@ -63,10 +63,40 @@ export function handleIncreaseLiquidity(ev: IncreaseLiquidity): void {
 }
 
 export function handleDecreaseLiquidity(ev: DecreaseLiquidity): void {
-  // PHASE 1 OPTIMIZATION: Use cache instead of ownerOf() RPC call
+  
+  let shouldProcess = false
+  
+  // 1. Check cache first (fast path)
   const isSafeOwned = isSafeOwnedNFT(ev.params.tokenId)
   
   if (isSafeOwned) {
+    shouldProcess = true
+    
+  } else {
+    
+    // 2. Check for existing active position (key fix for your issue!)
+    const positionId = SAFE_ADDRESS.toHex() + "-" + ev.params.tokenId.toString()
+    const id = Bytes.fromHexString(positionId)
+    const position = ProtocolPosition.load(id)
+    
+    if (position && position.isActive) {
+      shouldProcess = true
+    } else {
+      
+      // 3. Final fallback: check actual ownership on-chain
+      const mgr = NonfungiblePositionManager.bind(MANAGER)
+      const ownerResult = mgr.try_ownerOf(ev.params.tokenId)
+      
+      if (!ownerResult.reverted && isSafe(ownerResult.value)) {
+        shouldProcess = true
+        
+        // Ensure pool template exists and populate cache for future
+        ensurePoolTemplate(ev.params.tokenId)
+      }
+    }
+  }
+  
+  if (shouldProcess) {
     refreshVeloCLPosition(ev.params.tokenId, ev.block, ev.transaction.hash)
   }
 }

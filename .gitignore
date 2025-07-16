@@ -79,3 +79,9 @@ jspm_packages/
 
 #readme file 
 *.md
+
+#matchstick tests
+tests/
+
+#matchstick yaml
+matchstick.yaml

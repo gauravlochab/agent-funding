@@ -7,13 +7,29 @@ import { LiquidityAmounts }           from "./libraries/LiquidityAmounts"
 import { TickMath }                   from "./libraries/TickMath"
 import { ProtocolPosition }           from "../generated/schema"
 import { getUsd, refreshPortfolio }   from "./common"
-import { addAgentNFTToPool, removeAgentNFTFromPool } from "./veloIndexCache"
+import { addAgentNFTToPool, removeAgentNFTFromPool, getCachedPoolAddress, cachePoolAddress } from "./veloIndexCache"
 
 const MANAGER = Address.fromString("0x416b433906b1B72FA758e166e239c43d68dC6F29")
 const FACTORY = Address.fromString("0x548118C7E0B865C2CfA94D15EC86B666468ac758")
 
-// Helper function to derive pool address from position data
-function getPoolAddress(token0: Address, token1: Address, tickSpacing: i32): Address {
+// Helper function to derive pool address from position data with caching
+function getPoolAddress(token0: Address, token1: Address, tickSpacing: i32, tokenId: BigInt | null = null): Address {
+  // Try cache first if we have a tokenId
+  if (tokenId !== null) {
+    const cached = getCachedPoolAddress(tokenId)
+    if (cached !== null) {
+      return cached
+    }
+  }
+  
+  // Try to get from existing ProtocolPosition if we have tokenId
+  //if (tokenId !== null) {
+    // We need to find the position by tokenId across all agents
+    // This is a fallback - in practice the cache should hit first
+    // For now, we'll proceed to factory call and cache the result
+  //}
+  
+  // Factory call as last resort
   const factory = VelodromeCLFactory.bind(FACTORY)
   const poolResult = factory.try_getPool(token0, token1, tickSpacing)
   
@@ -25,7 +41,14 @@ function getPoolAddress(token0: Address, token1: Address, tickSpacing: i32): Add
     return Address.zero()
   }
   
-  return poolResult.value
+  const poolAddress = poolResult.value
+  
+  // Cache the result if we have a tokenId
+  if (tokenId !== null) {
+    cachePoolAddress(tokenId, poolAddress)
+  }
+  
+  return poolAddress
 }
 
 // 1.  Spawn pool template the first time we meet an NFT
@@ -40,8 +63,8 @@ export function ensurePoolTemplate(tokenId: BigInt): void {
   
   const pos = posResult.value
   
-  // Derive pool address from position data
-  const poolAddress = getPoolAddress(pos.value2, pos.value3, pos.value4 as i32)
+  // Derive pool address from position data with caching
+  const poolAddress = getPoolAddress(pos.value2, pos.value3, pos.value4 as i32, tokenId)
   
   if (poolAddress.equals(Address.zero())) {
     log.error("VELODROME: Failed to derive pool address for tokenId: {}", [tokenId.toString()])
@@ -56,7 +79,7 @@ export function ensurePoolTemplate(tokenId: BigInt): void {
 function isPositionClosed(liquidity: BigInt, amount0: BigDecimal, amount1: BigDecimal): boolean {
   const isLiquidityZero = liquidity.equals(BigInt.zero())
   const areAmountsZero = amount0.equals(BigDecimal.zero()) && amount1.equals(BigDecimal.zero())
-  
+    
   return isLiquidityZero || areAmountsZero
 }
 
@@ -91,8 +114,8 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
   
   const data = dataResult.value
 
-  // Derive pool address from position data
-  const poolAddress = getPoolAddress(data.value2, data.value3, data.value4 as i32)
+  // Derive pool address from position data with caching
+  const poolAddress = getPoolAddress(data.value2, data.value3, data.value4 as i32, tokenId)
   
   if (poolAddress.equals(Address.zero())) {
     log.error("VELODROME: Failed to derive pool address for tokenId: {}", [tokenId.toString()])
@@ -134,6 +157,8 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
 
   // write ProtocolPosition - use actual NFT owner, not position data owner
   let pp = ProtocolPosition.load(id)
+  const isNewPosition = pp == null
+  
   if (pp == null) {
     pp = new ProtocolPosition(id)
     pp.agent    = nftOwner
@@ -200,8 +225,8 @@ export function handleNFTTransferForCache(tokenId: BigInt, from: Address, to: Ad
   
   const pos = posResult.value
   
-  // Derive pool address from position data
-  const poolAddress = getPoolAddress(pos.value2, pos.value3, pos.value4 as i32)
+  // Derive pool address from position data with caching
+  const poolAddress = getPoolAddress(pos.value2, pos.value3, pos.value4 as i32, tokenId)
   
   if (poolAddress.equals(Address.zero())) {
     log.error("VELODROME: Failed to derive pool address for tokenId: {} in handleNFTTransferForCache", [tokenId.toString()])

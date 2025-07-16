@@ -2,13 +2,16 @@ import { Address, BigInt, log } from "@graphprotocol/graph-ts"
 
 // Simple in-memory cache to track which NFTs belong to which pools
 // This helps the Swap handler know which NFTs to refresh
+// Also caches pool addresses to avoid repeated factory calls
 class PoolNFTCache {
   private poolToNFTs: Map<string, BigInt[]>
   private nftToPool: Map<string, string>  // tokenId -> poolAddress for reverse lookup
+  private nftToPoolAddress: Map<string, Address>  // tokenId -> poolAddress for direct lookup
 
   constructor() {
     this.poolToNFTs = new Map<string, BigInt[]>()
     this.nftToPool = new Map<string, string>()
+    this.nftToPoolAddress = new Map<string, Address>()
   }
 
   addNFTToPool(poolAddress: Address, tokenId: BigInt): void {
@@ -34,7 +37,7 @@ class PoolNFTCache {
       nfts.push(tokenId)
       this.poolToNFTs.set(poolKey, nfts)
       this.nftToPool.set(tokenKey, poolKey)  // Add reverse lookup
-      log.info("Added NFT {} to pool {} cache", [tokenId.toString(), poolKey])
+      this.nftToPoolAddress.set(tokenKey, poolAddress)  // Cache pool address
     }
   }
 
@@ -53,7 +56,7 @@ class PoolNFTCache {
       }
       this.poolToNFTs.set(poolKey, newNfts)
       this.nftToPool.delete(tokenKey)  // Remove reverse lookup
-      log.info("Removed NFT {} from pool {} cache", [tokenId.toString(), poolKey])
+      this.nftToPoolAddress.delete(tokenKey)  // Remove pool address cache
     }
   }
 
@@ -71,6 +74,21 @@ class PoolNFTCache {
     }
     
     return []
+  }
+
+  getCachedPoolAddress(tokenId: BigInt): Address | null {
+    let tokenKey = tokenId.toString()
+    
+    if (this.nftToPoolAddress.has(tokenKey)) {
+      return this.nftToPoolAddress.get(tokenKey)
+    }
+    
+    return null
+  }
+
+  cachePoolAddress(tokenId: BigInt, poolAddress: Address): void {
+    let tokenKey = tokenId.toString()
+    this.nftToPoolAddress.set(tokenKey, poolAddress)
   }
 }
 
@@ -93,12 +111,19 @@ export function getAgentNFTsInPool(poolAddress: Address): BigInt[] {
 export function isSafeOwnedNFT(tokenId: BigInt): bool {
   // Use the reverse lookup to check if Safe owns this NFT
   // Since we only track Safe-owned NFTs in the cache, if it's found, Safe owns it
-  
-  log.info("🔍 CACHE CHECK: Checking if Safe owns tokenId: {}", [tokenId.toString()])
-  
-  const isOwned = cache.isNFTInCache(tokenId)
-  
-  log.info("🔍 CACHE RESULT: Safe owns tokenId {}: {}", [tokenId.toString(), isOwned.toString()])
-  
-  return isOwned
+  const isInCache = cache.isNFTInCache(tokenId)
+  log.info("VELODROME: Cache lookup for tokenId {}: isInCache = {}", [
+    tokenId.toString(),
+    isInCache.toString()
+  ])
+  return isInCache
+}
+
+// Pool address caching functions
+export function getCachedPoolAddress(tokenId: BigInt): Address | null {
+  return cache.getCachedPoolAddress(tokenId)
+}
+
+export function cachePoolAddress(tokenId: BigInt, poolAddress: Address): void {
+  cache.cachePoolAddress(tokenId, poolAddress)
 }

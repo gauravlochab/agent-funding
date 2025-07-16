@@ -8,6 +8,7 @@ import { TickMath }                   from "./libraries/TickMath"
 import { ProtocolPosition }           from "../generated/schema"
 import { getUsd, refreshPortfolio }   from "./common"
 import { addAgentNFTToPool, removeAgentNFTFromPool, getCachedPoolAddress, cachePoolAddress } from "./veloIndexCache"
+import { getTokenPriceUSD } from "./priceDiscovery"
 
 const MANAGER = Address.fromString("0x416b433906b1B72FA758e166e239c43d68dC6F29")
 const FACTORY = Address.fromString("0x548118C7E0B865C2CfA94D15EC86B666468ac758")
@@ -143,9 +144,9 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
   const amounts = LiquidityAmounts.getAmountsForLiquidity(
                     slot0.value0, sqrtPa, sqrtPb, data.value7)
 
-  // USD pricing
-  const token0Price = getUsd(data.value2, block)
-  const token1Price = getUsd(data.value3, block)
+  // USD pricing - NEW HARDCODED VERSION
+  const token0Price = getTokenPriceUSD(data.value2, block.timestamp, false) // token0
+  const token1Price = getTokenPriceUSD(data.value3, block.timestamp, false) // token1
 
   // Convert amounts from wei to human readable (6 decimals for USDC)
   const amount0Human = amounts.amount0.toBigDecimal().div(BigDecimal.fromString("1e6"))

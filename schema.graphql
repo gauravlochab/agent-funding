@@ -64,3 +64,35 @@ type ProtocolPosition @entity(immutable: false) {
   exitAmount1USD: BigDecimal # Final USD value of token1 at closure
   exitAmountUSD: BigDecimal # Total final USD value at closure
 }
+
+type PriceSource @entity(immutable: false) {
+  id: Bytes!                    # pool/oracle address
+  token: Token!
+  sourceType: String!           # "chainlink", "curve_3pool", "uniswap_v3", "velodrome_v2"
+  priority: Int!                # 1 = highest priority
+  isActive: Boolean!
+  lastUpdate: BigInt!
+  lastPrice: BigDecimal!
+  confidence: BigDecimal!       # 0-1 confidence score
+}
+
+type Token @entity(immutable: false) {
+  id: Bytes!                    # token address
+  symbol: String!
+  name: String!
+  decimals: BigInt!
+  derivedUSD: BigDecimal!       # Current best price
+  priceSources: [PriceSource!]! # Hardcoded price sources
+  lastPriceUpdate: BigInt!
+  priceConfidence: BigDecimal!  # Current price confidence level
+}
+
+type PriceUpdate @entity(immutable: true) {
+  id: Bytes!                    # tx hash + timestamp
+  token: Token!
+  priceUSD: BigDecimal!
+  source: PriceSource!
+  confidence: BigDecimal!
+  timestamp: BigInt!
+  block: BigInt!
+}

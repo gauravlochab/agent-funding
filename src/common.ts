@@ -10,6 +10,7 @@ import {
   ETH_USD_FEED,
   USDC_USD_FEED
 } from "./config"
+import { getTokenPriceUSD } from "./priceDiscovery"
 
 // — Whitelist & tokens (now imported from config)
 export const WHITELIST: string[] = TREASURY_ADDRESSES
@@ -104,23 +105,8 @@ export function getUsdcUsd(_b: ethereum.Block): BigDecimal {
 
 // Generic USD price function for any token
 export function getUsd(token: Address, block: ethereum.Block): BigDecimal {
-  // For now, we'll implement basic price mapping
-  // In a full implementation, you'd want to add more token price feeds
-  
-  // ETH (wrapped or native)
-  if (token.toHexString().toLowerCase() == "0x4200000000000000000000000000000000000006" || // WETH on Optimism
-      token.toHexString().toLowerCase() == "0x0000000000000000000000000000000000000000") {   // ETH
-    return getEthUsd(block)
-  }
-  
-  // USDC tokens
-  if (token.equals(FUNDING_TOKENS[0]) || token.equals(FUNDING_TOKENS[1])) {
-    return getUsdcUsd(block)
-  }
-  
-  // Default to $1 for unknown tokens (should be extended with more price feeds)
-  log.warning("Unknown token for USD pricing: {}, defaulting to $1", [token.toHexString()])
-  return BigDecimal.fromString("1.0")
+  // Use hardcoded pool pricing for all whitelisted tokens
+  return getTokenPriceUSD(token, block.timestamp, false)
 }
 
 // Portfolio refresh function - placeholder for now

@@ -29,7 +29,7 @@ export function handleNFTTransfer(ev: Transfer): void {
   if (outgoing) {
     // Mark position as closed when NFT is transferred out
     const positionId = ev.params.from.toHex() + "-" + ev.params.tokenId.toString()
-    const id = Bytes.fromHexString(positionId)
+    const id = Bytes.fromUTF8(positionId)
     let position = ProtocolPosition.load(id)
     
     if (position && position.isActive) {
@@ -76,7 +76,7 @@ export function handleDecreaseLiquidity(ev: DecreaseLiquidity): void {
     
     // 2. Check for existing active position (key fix for your issue!)
     const positionId = SAFE_ADDRESS.toHex() + "-" + ev.params.tokenId.toString()
-    const id = Bytes.fromHexString(positionId)
+    const id = Bytes.fromUTF8(positionId)
     const position = ProtocolPosition.load(id)
     
     if (position && position.isActive) {

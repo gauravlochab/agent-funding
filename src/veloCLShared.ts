@@ -99,7 +99,7 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
 
   // Early check - don't process closed positions
   const idString = nftOwner.toHex() + "-" + tokenId.toString()
-  const id = Bytes.fromHexString(idString)
+  const id = Bytes.fromUTF8(idString)
   let position = ProtocolPosition.load(id)
   
   if (position && !position.isActive) {

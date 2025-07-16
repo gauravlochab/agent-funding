@@ -86,8 +86,9 @@ function initializeTokens(): void {
         95
       ),
       // Priority 3: Uniswap V3 USDC/USDT (high volume backup)
+      // TODO: VERIFY - Pool address needs verification on Optimism
       new PriceSourceConfig(
-        Address.fromString("0xa73c628eaf6e283e26a7b1f8001cf186aa4c0e8e"),
+        Address.fromString("0xa73c628eaf6e283e26a7b1f8001cf186aa4c0e8e"), // VERIFY: USDC/USDT 0.01% pool
         "uniswap_v3",
         3,
         90,
@@ -111,8 +112,9 @@ function initializeTokens(): void {
         99
       ),
       // Priority 2: Uniswap V3 WETH/USDC (high volume)
+      // TODO: VERIFY - Pool address needs verification on Optimism
       new PriceSourceConfig(
-        Address.fromString("0x85149247691df622eaf1a8bd0cafd40bc45154a9"),
+        Address.fromString("0x85149247691df622eaf1a8bd0cafd40bc45154a9"), // VERIFY: WETH/USDC.e pool
         "uniswap_v3",
         2,
         90,
@@ -175,8 +177,9 @@ function initializeTokens(): void {
     6,
     [
       // Priority 1: Uniswap V3 USDC.e/USDT (high volume)
+      // TODO: VERIFY - Pool address needs verification on Optimism
       new PriceSourceConfig(
-        Address.fromString("0xf1f199342687a7d78bcc16fce79fa2665ef870e1"),
+        Address.fromString("0xf1f199342687a7d78bcc16fce79fa2665ef870e1"), // VERIFY: USDC.e/USDT 0.01% pool
         "uniswap_v3",
         1,
         85,
@@ -199,21 +202,13 @@ function initializeTokens(): void {
     "DOLA",
     18,
     [
-      // Priority 1: Velodrome DOLA/USDC
+      // Only use DOLA/USDC pool - no MAI pair available
       new PriceSourceConfig(
         Address.fromString("0x6c5019d345ec05004a7e7b0623a91a0d9b8d590d"),
         "velodrome_v2",
         1,
         80,
         Address.fromString("0x0b2c639c533813f4aa9d7837caf62653d097ff85") // USDC
-      ),
-      // Priority 2: Velodrome DOLA/MAI (backup)
-      new PriceSourceConfig(
-        Address.fromString("0x720d336bf42d63d9b953f1ef5e2376813773e364"),
-        "velodrome_v2",
-        2,
-        75,
-        Address.fromString("0xdFA46478F9e5EA86d57387849598dbFB2e964b02") // MAI
       )
     ]
   ))
@@ -279,74 +274,26 @@ function initializeTokens(): void {
     ]
   ))
 
-  // sDAI - Velodrome SlipStream
+  // sDAI - Velodrome SlipStream only
   TOKENS.set("0x2218a117083f5b482b0bb821d27056ba9c04b1d3", new TokenConfig(
     Address.fromString("0x2218a117083f5b482b0bb821d27056ba9c04b1d3"),
     "sDAI",
     18,
     [
-      // Priority 1: Velodrome SlipStream USDC/sDAI
+      // Only use Velodrome SlipStream USDC/sDAI pool
       new PriceSourceConfig(
         Address.fromString("0x131525f3fa23d65dc2b1eb8b6483a28c43b06916"),
         "velodrome_slipstream",
         1,
         80,
         Address.fromString("0x0b2c639c533813f4aa9d7837caf62653d097ff85") // USDC
-      ),
-      // Priority 2: Reference DAI Chainlink + yield estimate
-      new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("DAI_USD")!),
-        "chainlink_reference",
-        2,
-        75
       )
     ]
   ))
 
-  // oUSDT - Reference USDT
-  TOKENS.set("0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189", new TokenConfig(
-    Address.fromString("0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189"),
-    "oUSDT",
-    18,
-    [
-      new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("USDT_USD")!),
-        "chainlink_reference",
-        1,
-        70
-      )
-    ]
-  ))
-
-  // USDGLO - Reference USDC
-  TOKENS.set("0x4f604735c1cf31399c6e711d5962b2b3e0225ad3", new TokenConfig(
-    Address.fromString("0x4f604735c1cf31399c6e711d5962b2b3e0225ad3"),
-    "USDGLO",
-    18,
-    [
-      new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("USDC_USD")!),
-        "chainlink_reference",
-        1,
-        70
-      )
-    ]
-  ))
-
-  // USDT0 - Reference USDT
-  TOKENS.set("0x01bff41798a0bcf287b996046ca68b395dbc1071", new TokenConfig(
-    Address.fromString("0x01bff41798a0bcf287b996046ca68b395dbc1071"),
-    "USDT0",
-    6,
-    [
-      new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("USDT_USD")!),
-        "chainlink_reference",
-        1,
-        70
-      )
-    ]
-  ))
+  // Note: oUSDT, USDGLO, and USDT0 removed due to lack of reliable price sources
+  // These tokens had non-existent chainlink_reference feeds and no alternative pools
+  // They can be re-added when proper price sources are identified
 }
 
 // Call initialization

@@ -6,18 +6,40 @@ import { getTokenConfig, TokenConfig, PriceSourceConfig } from "./tokenConfig"
 const PRICE_CACHE_DURATION = BigInt.fromI32(300)
 const MIN_CONFIDENCE_THRESHOLD = BigDecimal.fromString("0.5") // 50% minimum confidence
 
+// Performance optimization: cache token validations
+let validatedTokens = new Map<string, boolean>()
+
+function isTokenValidated(address: Address): boolean {
+  let key = address.toHexString().toLowerCase()
+  
+  if (validatedTokens.has(key)) {
+    return validatedTokens.get(key)!
+  }
+  
+  let config = getTokenConfig(address)
+  let isValid = config != null
+  validatedTokens.set(key, isValid)
+  
+  return isValid
+}
+
 export function getTokenPriceUSD(
   tokenAddress: Address,
   currentTimestamp: BigInt,
   forceRefresh: boolean = false
 ): BigDecimal {
   
+  // Quick validation check first
+  if (!isTokenValidated(tokenAddress)) {
+    log.error("🚫 PRICE: Token not in whitelist: {}", [tokenAddress.toHexString()])
+    return BigDecimal.fromString("0")
+  }
+
   let token = Token.load(tokenAddress)
   if (token == null) {
     token = initializeToken(tokenAddress)
     if (token == null) {
-      log.error("🚫 PRICE: Token not in whitelist: {}", [tokenAddress.toHexString()])
-      return BigDecimal.fromString("0") // NO fallback to $1
+      return BigDecimal.fromString("0")
     }
   }
   
@@ -59,7 +81,23 @@ export function getTokenPriceUSD(
   }
   
   log.error("❌ PRICE: No reliable price found for {} (tried all sources)", [token.symbol])
-  return BigDecimal.fromString("0") // Fail gracefully, no $1 fallback
+
+  // For critical stablecoins, try emergency fallback to prevent total failure
+  let criticalStablecoins = [
+    "0x0b2c639c533813f4aa9d7837caf62653d097ff85", // USDC
+    "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",  // USDT
+    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"   // DAI
+  ]
+
+  let tokenHex = token.id.toHexString().toLowerCase()
+  for (let i = 0; i < criticalStablecoins.length; i++) {
+    if (tokenHex == criticalStablecoins[i]) {
+      log.warning("🚨 EMERGENCY: Using $1.00 fallback for critical stablecoin {}", [token.symbol])
+      return BigDecimal.fromString("1.0") // Emergency fallback for critical stablecoins only
+    }
+  }
+
+  return BigDecimal.fromString("0") // Fail gracefully for non-critical tokens
 }
 
 class PriceResult {
@@ -151,19 +189,25 @@ function getPriceFromSource(
   
   if (sourceType == "chainlink") {
     let price = getChainlinkPrice(sourceConfig.address)
-    return new PriceResult(price, baseConfidence, "chainlink")
+    if (price.gt(BigDecimal.fromString("0")) && validatePriceResult(price, token.symbol)) {
+      return new PriceResult(price, baseConfidence, "chainlink")
+    }
   }
   
   if (sourceType == "chainlink_reference") {
     // Used for tokens without direct feeds (USDC.e referencing USDC)
     let price = getChainlinkPrice(sourceConfig.address)
-    // Slightly lower confidence for reference prices
-    return new PriceResult(price, baseConfidence.times(BigDecimal.fromString("0.9")), "chainlink_ref")
+    if (price.gt(BigDecimal.fromString("0")) && validatePriceResult(price, token.symbol)) {
+      // Slightly lower confidence for reference prices
+      return new PriceResult(price, baseConfidence.times(BigDecimal.fromString("0.9")), "chainlink_ref")
+    }
   }
   
   if (sourceType == "curve_3pool") {
     let price = getCurve3PoolPrice(Address.fromBytes(token.id))
-    return new PriceResult(price, baseConfidence, "curve")
+    if (price.gt(BigDecimal.fromString("0")) && validatePriceResult(price, token.symbol)) {
+      return new PriceResult(price, baseConfidence, "curve")
+    }
   }
   
   if (sourceType == "uniswap_v3") {
@@ -173,7 +217,9 @@ function getPriceFromSource(
       sourceConfig.pairToken!,
       sourceConfig.fee
     )
-    return new PriceResult(price, baseConfidence, "uniswap_v3")
+    if (price.gt(BigDecimal.fromString("0")) && validatePriceResult(price, token.symbol)) {
+      return new PriceResult(price, baseConfidence, "uniswap_v3")
+    }
   }
   
   if (sourceType == "velodrome_v2" || sourceType == "velodrome_slipstream") {
@@ -182,7 +228,9 @@ function getPriceFromSource(
       sourceConfig.address,
       sourceConfig.pairToken!
     )
-    return new PriceResult(price, baseConfidence, "velodrome")
+    if (price.gt(BigDecimal.fromString("0")) && validatePriceResult(price, token.symbol)) {
+      return new PriceResult(price, baseConfidence, "velodrome")
+    }
   }
   
   return new PriceResult(BigDecimal.fromString("0"), BigDecimal.fromString("0"), "unsupported")
@@ -202,6 +250,24 @@ function createPriceUpdate(
   update.timestamp = timestamp
   update.block = BigInt.fromI32(0) // Would need block context
   update.save()
+}
+
+function validatePriceResult(price: BigDecimal, tokenSymbol: string): boolean {
+  // Reasonable price bounds for most tokens
+  let minPrice = BigDecimal.fromString("0.0001")  // $0.0001
+  let maxPrice = BigDecimal.fromString("100000")   // $100,000
+  
+  if (price.le(minPrice)) {
+    log.warning("⚠️ PRICE: Price too low for {}: ${}", [tokenSymbol, price.toString()])
+    return false
+  }
+  
+  if (price.ge(maxPrice)) {
+    log.warning("⚠️ PRICE: Price too high for {}: ${}", [tokenSymbol, price.toString()])
+    return false
+  }
+  
+  return true
 }
 
 // Import price adapter functions (we'll create these next)

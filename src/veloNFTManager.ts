@@ -8,7 +8,7 @@ import {
 import { isSafe } from "./common"
 import { SAFE_ADDRESS, VELO_NFT_MANAGER } from "./config"
 import { ensurePoolTemplate, refreshVeloCLPosition, handleNFTTransferForCache } from "./veloCLShared"
-import { isSafeOwnedNFT } from "./veloIndexCache"
+import { isSafeOwnedNFT } from "./poolIndexCache"
 import { log, Address, Bytes } from "@graphprotocol/graph-ts"
 import { ProtocolPosition } from "../generated/schema"
 
@@ -55,7 +55,7 @@ export function handleNFTTransfer(ev: Transfer): void {
 
 export function handleIncreaseLiquidity(ev: IncreaseLiquidity): void {
   // PHASE 1 OPTIMIZATION: Use cache instead of ownerOf() RPC call
-  const isSafeOwned = isSafeOwnedNFT(ev.params.tokenId)
+  const isSafeOwned = isSafeOwnedNFT("velodrome-cl", ev.params.tokenId)
   
   if (isSafeOwned) {
     refreshVeloCLPosition(ev.params.tokenId, ev.block, ev.transaction.hash)
@@ -67,7 +67,7 @@ export function handleDecreaseLiquidity(ev: DecreaseLiquidity): void {
   let shouldProcess = false
   
   // 1. Check cache first (fast path)
-  const isSafeOwned = isSafeOwnedNFT(ev.params.tokenId)
+  const isSafeOwned = isSafeOwnedNFT("velodrome-cl", ev.params.tokenId)
   
   if (isSafeOwned) {
     shouldProcess = true
@@ -103,7 +103,7 @@ export function handleDecreaseLiquidity(ev: DecreaseLiquidity): void {
 
 export function handleCollect(ev: Collect): void {
   // PHASE 1 OPTIMIZATION: Use cache instead of ownerOf() RPC call
-  const isSafeOwned = isSafeOwnedNFT(ev.params.tokenId)
+  const isSafeOwned = isSafeOwnedNFT("velodrome-cl", ev.params.tokenId)
   
   if (isSafeOwned) {
     refreshVeloCLPosition(ev.params.tokenId, ev.block, ev.transaction.hash)

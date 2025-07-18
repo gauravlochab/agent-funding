@@ -6,21 +6,11 @@ import { getTokenConfig, TokenConfig, PriceSourceConfig } from "./tokenConfig"
 const PRICE_CACHE_DURATION = BigInt.fromI32(300)
 const MIN_CONFIDENCE_THRESHOLD = BigDecimal.fromString("0.5") // 50% minimum confidence
 
-// Performance optimization: cache token validations
-let validatedTokens = new Map<string, boolean>()
-
+// Simplified token validation without caching to avoid Map issues
 function isTokenValidated(address: Address): boolean {
-  let key = address.toHexString().toLowerCase()
-  
-  if (validatedTokens.has(key)) {
-    return validatedTokens.get(key)!
-  }
-  
+  // Direct validation without caching - simpler and safer
   let config = getTokenConfig(address)
-  let isValid = config != null
-  validatedTokens.set(key, isValid)
-  
-  return isValid
+  return config != null
 }
 
 export function getTokenPriceUSD(

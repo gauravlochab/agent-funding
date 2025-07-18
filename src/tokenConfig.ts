@@ -55,11 +55,24 @@ CHAINLINK_FEEDS.set("USDT_USD", "0xECef79E109e997bCA29c1c0897ec9d7b03647F5E")
 CHAINLINK_FEEDS.set("DAI_USD", "0x8dBa75e83DA73cc766A7e5a0ee71F656BAb470d6")
 
 export function getTokenConfig(address: Address): TokenConfig | null {
-  return TOKENS.get(address.toHexString().toLowerCase())
+  let key = address.toHexString().toLowerCase()
+  if (TOKENS.has(key)) {
+    return TOKENS.get(key)
+  }
+  return null
 }
 
 export function getChainlinkFeed(feedName: string): string | null {
   return CHAINLINK_FEEDS.get(feedName)
+}
+
+function getChainlinkFeedSafe(feedName: string): string {
+  let feed = CHAINLINK_FEEDS.get(feedName)
+  if (feed === null) {
+    // This should never happen if feeds are properly configured
+    throw new Error("Chainlink feed not found: " + feedName)
+  }
+  return feed
 }
 
 // Initialize token configurations
@@ -73,7 +86,7 @@ function initializeTokens(): void {
     [
       // Priority 1: Chainlink USDC/USD (highest confidence)
       new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("USDC_USD")!),
+        Address.fromString(getChainlinkFeedSafe("USDC_USD")),
         "chainlink",
         1,
         99
@@ -106,7 +119,7 @@ function initializeTokens(): void {
     [
       // Priority 1: Chainlink ETH/USD
       new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("ETH_USD")!),
+        Address.fromString(getChainlinkFeedSafe("ETH_USD")),
         "chainlink",
         1,
         99
@@ -132,7 +145,7 @@ function initializeTokens(): void {
     [
       // Priority 1: Chainlink DAI/USD
       new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("DAI_USD")!),
+        Address.fromString(getChainlinkFeedSafe("DAI_USD")),
         "chainlink",
         1,
         99
@@ -155,7 +168,7 @@ function initializeTokens(): void {
     [
       // Priority 1: Chainlink USDT/USD
       new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("USDT_USD")!),
+        Address.fromString(getChainlinkFeedSafe("USDT_USD")),
         "chainlink",
         1,
         99
@@ -188,7 +201,7 @@ function initializeTokens(): void {
       ),
       // Priority 2: Reference USDC Chainlink (should be ~1:1)
       new PriceSourceConfig(
-        Address.fromString(CHAINLINK_FEEDS.get("USDC_USD")!),
+        Address.fromString(getChainlinkFeedSafe("USDC_USD")),
         "chainlink_reference",
         2,
         80

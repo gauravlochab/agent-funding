@@ -1,12 +1,12 @@
 import { Swap } from "../generated/templates/VeloCLPool/VelodromeCLPool"
-import { getAgentNFTsInPool } from "./veloIndexCache"        // tiny util map
+import { getAgentNFTsInPool } from "./poolIndexCache"        // tiny util map
 import { refreshVeloCLPosition } from "./veloCLShared"
 import { ProtocolPosition } from "../generated/schema"
 import { Address, Bytes, log } from "@graphprotocol/graph-ts"
 import { SAFE_ADDRESS } from "./config"
 
 export function handleSwap(ev: Swap): void {
-  const ids = getAgentNFTsInPool(ev.address)                // BigInt[]
+  const ids = getAgentNFTsInPool("velodrome-cl", ev.address)                // BigInt[]
   
   for (let i = 0; i < ids.length; i++) {
     const tokenId = ids[i]

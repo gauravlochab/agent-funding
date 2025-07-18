@@ -14,9 +14,9 @@ class PoolNFTCache {
     this.nftToPoolAddress = new Map<string, Address>()
   }
 
-  addNFTToPool(poolAddress: Address, tokenId: BigInt): void {
-    let poolKey = poolAddress.toHexString()
-    let tokenKey = tokenId.toString()
+  addNFTToPool(protocol: string, poolAddress: Address, tokenId: BigInt): void {
+    let poolKey = protocol + "-" + poolAddress.toHexString()
+    let tokenKey = protocol + "-" + tokenId.toString()
     let nfts: BigInt[] = []
     
     // Check if key exists before getting
@@ -41,9 +41,9 @@ class PoolNFTCache {
     }
   }
 
-  removeNFTFromPool(poolAddress: Address, tokenId: BigInt): void {
-    let poolKey = poolAddress.toHexString()
-    let tokenKey = tokenId.toString()
+  removeNFTFromPool(protocol: string, poolAddress: Address, tokenId: BigInt): void {
+    let poolKey = protocol + "-" + poolAddress.toHexString()
+    let tokenKey = protocol + "-" + tokenId.toString()
     
     // Check if key exists before getting
     if (this.poolToNFTs.has(poolKey)) {
@@ -60,13 +60,13 @@ class PoolNFTCache {
     }
   }
 
-  isNFTInCache(tokenId: BigInt): bool {
-    let tokenKey = tokenId.toString()
+  isNFTInCache(protocol: string, tokenId: BigInt): bool {
+    let tokenKey = protocol + "-" + tokenId.toString()
     return this.nftToPool.has(tokenKey)
   }
 
-  getNFTsForPool(poolAddress: Address): BigInt[] {
-    let poolKey = poolAddress.toHexString()
+  getNFTsForPool(protocol: string, poolAddress: Address): BigInt[] {
+    let poolKey = protocol + "-" + poolAddress.toHexString()
     
     // Check if key exists before getting
     if (this.poolToNFTs.has(poolKey)) {
@@ -76,8 +76,8 @@ class PoolNFTCache {
     return []
   }
 
-  getCachedPoolAddress(tokenId: BigInt): Address | null {
-    let tokenKey = tokenId.toString()
+  getCachedPoolAddress(protocol: string, tokenId: BigInt): Address | null {
+    let tokenKey = protocol + "-" + tokenId.toString()
     
     if (this.nftToPoolAddress.has(tokenKey)) {
       return this.nftToPoolAddress.get(tokenKey)
@@ -86,8 +86,8 @@ class PoolNFTCache {
     return null
   }
 
-  cachePoolAddress(tokenId: BigInt, poolAddress: Address): void {
-    let tokenKey = tokenId.toString()
+  cachePoolAddress(protocol: string, tokenId: BigInt, poolAddress: Address): void {
+    let tokenKey = protocol + "-" + tokenId.toString()
     this.nftToPoolAddress.set(tokenKey, poolAddress)
   }
 }
@@ -96,23 +96,24 @@ class PoolNFTCache {
 let cache = new PoolNFTCache()
 
 // Exported functions
-export function addAgentNFTToPool(poolAddress: Address, tokenId: BigInt): void {
-  cache.addNFTToPool(poolAddress, tokenId)
+export function addAgentNFTToPool(protocol: string, poolAddress: Address, tokenId: BigInt): void {
+  cache.addNFTToPool(protocol, poolAddress, tokenId)
 }
 
-export function removeAgentNFTFromPool(poolAddress: Address, tokenId: BigInt): void {
-  cache.removeNFTFromPool(poolAddress, tokenId)
+export function removeAgentNFTFromPool(protocol: string, poolAddress: Address, tokenId: BigInt): void {
+  cache.removeNFTFromPool(protocol, poolAddress, tokenId)
 }
 
-export function getAgentNFTsInPool(poolAddress: Address): BigInt[] {
-  return cache.getNFTsForPool(poolAddress)
+export function getAgentNFTsInPool(protocol: string, poolAddress: Address): BigInt[] {
+  return cache.getNFTsForPool(protocol, poolAddress)
 }
 
-export function isSafeOwnedNFT(tokenId: BigInt): bool {
+export function isSafeOwnedNFT(protocol: string, tokenId: BigInt): bool {
   // Use the reverse lookup to check if Safe owns this NFT
   // Since we only track Safe-owned NFTs in the cache, if it's found, Safe owns it
-  const isInCache = cache.isNFTInCache(tokenId)
-  log.info("VELODROME: Cache lookup for tokenId {}: isInCache = {}", [
+  const isInCache = cache.isNFTInCache(protocol, tokenId)
+  log.info("{}: Cache lookup for tokenId {}: isInCache = {}", [
+    protocol.toUpperCase(),
     tokenId.toString(),
     isInCache.toString()
   ])
@@ -120,10 +121,10 @@ export function isSafeOwnedNFT(tokenId: BigInt): bool {
 }
 
 // Pool address caching functions
-export function getCachedPoolAddress(tokenId: BigInt): Address | null {
-  return cache.getCachedPoolAddress(tokenId)
+export function getCachedPoolAddress(protocol: string, tokenId: BigInt): Address | null {
+  return cache.getCachedPoolAddress(protocol, tokenId)
 }
 
-export function cachePoolAddress(tokenId: BigInt, poolAddress: Address): void {
-  cache.cachePoolAddress(tokenId, poolAddress)
+export function cachePoolAddress(protocol: string, tokenId: BigInt, poolAddress: Address): void {
+  cache.cachePoolAddress(protocol, tokenId, poolAddress)
 }

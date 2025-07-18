@@ -7,17 +7,15 @@ import { LiquidityAmounts }           from "./libraries/LiquidityAmounts"
 import { TickMath }                   from "./libraries/TickMath"
 import { ProtocolPosition }           from "../generated/schema"
 import { getUsd, refreshPortfolio }   from "./common"
-import { addAgentNFTToPool, removeAgentNFTFromPool, getCachedPoolAddress, cachePoolAddress } from "./veloIndexCache"
+import { addAgentNFTToPool, removeAgentNFTFromPool, getCachedPoolAddress, cachePoolAddress } from "./poolIndexCache"
 import { getTokenPriceUSD } from "./priceDiscovery"
-
-const MANAGER = Address.fromString("0x416b433906b1B72FA758e166e239c43d68dC6F29")
-const FACTORY = Address.fromString("0x548118C7E0B865C2CfA94D15EC86B666468ac758")
+import { VELO_MANAGER, VELO_FACTORY } from "./constants"
 
 // Helper function to derive pool address from position data with caching
 function getPoolAddress(token0: Address, token1: Address, tickSpacing: i32, tokenId: BigInt | null = null): Address {
   // Try cache first if we have a tokenId
   if (tokenId !== null) {
-    const cached = getCachedPoolAddress(tokenId)
+    const cached = getCachedPoolAddress("velodrome-cl", tokenId)
     if (cached !== null) {
       return cached
     }
@@ -31,7 +29,7 @@ function getPoolAddress(token0: Address, token1: Address, tickSpacing: i32, toke
   //}
   
   // Factory call as last resort
-  const factory = VelodromeCLFactory.bind(FACTORY)
+  const factory = VelodromeCLFactory.bind(VELO_FACTORY)
   const poolResult = factory.try_getPool(token0, token1, tickSpacing)
   
   if (poolResult.reverted) {
@@ -46,7 +44,7 @@ function getPoolAddress(token0: Address, token1: Address, tickSpacing: i32, toke
   
   // Cache the result if we have a tokenId
   if (tokenId !== null) {
-    cachePoolAddress(tokenId, poolAddress)
+    cachePoolAddress("velodrome-cl", tokenId, poolAddress)
   }
   
   return poolAddress
@@ -54,7 +52,7 @@ function getPoolAddress(token0: Address, token1: Address, tickSpacing: i32, toke
 
 // 1.  Spawn pool template the first time we meet an NFT
 export function ensurePoolTemplate(tokenId: BigInt): void {
-  const mgr = NonfungiblePositionManager.bind(MANAGER)
+  const mgr = NonfungiblePositionManager.bind(VELO_MANAGER)
   const posResult = mgr.try_positions(tokenId)
   
   if (posResult.reverted) {
@@ -73,7 +71,7 @@ export function ensurePoolTemplate(tokenId: BigInt): void {
   }
   
   VeloCLPool.create(poolAddress)
-  addAgentNFTToPool(poolAddress, tokenId)
+  addAgentNFTToPool("velodrome-cl", poolAddress, tokenId)
 }
 
 // Helper function to check if position is closed
@@ -86,7 +84,7 @@ function isPositionClosed(liquidity: BigInt, amount0: BigDecimal, amount1: BigDe
 
 // 2.  Re-price NFT into USD + persist
 export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, txHash: Bytes = Bytes.empty()): void {
-  const mgr = NonfungiblePositionManager.bind(MANAGER)
+  const mgr = NonfungiblePositionManager.bind(VELO_MANAGER)
   
   // First, get the actual NFT owner
   const ownerResult = mgr.try_ownerOf(tokenId)
@@ -205,7 +203,7 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
     pp.exitAmountUSD = usd
     
     // Remove from cache to prevent future swap updates
-    removeAgentNFTFromPool(poolAddress, tokenId)
+    removeAgentNFTFromPool("velodrome-cl", poolAddress, tokenId)
   }
   
   pp.save()
@@ -216,7 +214,7 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
 
 // 3. Handle NFT transfers (add/remove from cache)
 export function handleNFTTransferForCache(tokenId: BigInt, from: Address, to: Address): void {
-  const mgr = NonfungiblePositionManager.bind(MANAGER)
+  const mgr = NonfungiblePositionManager.bind(VELO_MANAGER)
   const posResult = mgr.try_positions(tokenId)
   
   if (posResult.reverted) {
@@ -236,11 +234,11 @@ export function handleNFTTransferForCache(tokenId: BigInt, from: Address, to: Ad
   
   // Remove from cache if transferring out
   if (!from.equals(Address.zero())) {
-    removeAgentNFTFromPool(poolAddress, tokenId)
+    removeAgentNFTFromPool("velodrome-cl", poolAddress, tokenId)
   }
   
   // Add to cache if transferring in
   if (!to.equals(Address.zero())) {
-    addAgentNFTToPool(poolAddress, tokenId)
+    addAgentNFTToPool("velodrome-cl", poolAddress, tokenId)
   }
 }

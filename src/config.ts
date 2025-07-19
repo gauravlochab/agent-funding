@@ -5,12 +5,12 @@ import { Address } from "@graphprotocol/graph-ts"
 // =============================================================================
 
 // Safe address to monitor
-export const SAFE_ADDRESS = Address.fromString("0x9f3abfc3301093f39c2a137f87c525b4a0832ba9")
-export const SAFE_ADDRESS_HEX = "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9" // Lowercase for quick comparison
+export const SAFE_ADDRESS = Address.fromString("0x4b00f1a232c28254223c8c177e997ab298e1e40a")
+export const SAFE_ADDRESS_HEX = "0x4b00f1a232c28254223c8c177e997ab298e1e40a" // Lowercase for quick comparison
 
 // Treasury/Whitelisted addresses
 export const TREASURY_ADDRESSES: string[] = [
-  "0x5da0ad7f4c888a61ec9d8d1c7121dc8f2e70fbd4"  // Treasury address (EOA for the safe)
+  "0xcc189c207e66dc24b0ba0171c3d65729ecbb9088"  // Treasury address (EOA for the safe)
 ]
 
 // Token addresses (network-specific)

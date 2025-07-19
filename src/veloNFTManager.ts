@@ -54,10 +54,55 @@ export function handleNFTTransfer(ev: Transfer): void {
 }
 
 export function handleIncreaseLiquidity(ev: IncreaseLiquidity): void {
+  log.info("VELODROME: handleIncreaseLiquidity called for tokenId: {}, tx: {}", [
+    ev.params.tokenId.toString(),
+    ev.transaction.hash.toHexString()
+  ])
+  
+  let shouldProcess = false
+  
   // PHASE 1 OPTIMIZATION: Use cache instead of ownerOf() RPC call
   const isSafeOwned = isSafeOwnedNFT("velodrome-cl", ev.params.tokenId)
   
+  log.info("VELODROME: isSafeOwned check result: {} for tokenId: {}", [
+    isSafeOwned.toString(),
+    ev.params.tokenId.toString()
+  ])
+  
   if (isSafeOwned) {
+    shouldProcess = true
+  } else {
+    // FALLBACK: Check actual ownership for positions not in cache (existing positions)
+    log.info("VELODROME: Cache miss for tokenId: {}, checking actual ownership", [
+      ev.params.tokenId.toString()
+    ])
+    
+    const mgr = NonfungiblePositionManager.bind(MANAGER)
+    const ownerResult = mgr.try_ownerOf(ev.params.tokenId)
+    
+    if (!ownerResult.reverted && isSafe(ownerResult.value)) {
+      shouldProcess = true
+      log.info("VELODROME: Actual ownership confirmed for tokenId: {}, owner: {}", [
+        ev.params.tokenId.toString(),
+        ownerResult.value.toHexString()
+      ])
+      
+      // Ensure pool template exists and populate cache for future
+      ensurePoolTemplate(ev.params.tokenId)
+    } else {
+      log.info("VELODROME: Actual ownership check failed for tokenId: {}", [
+        ev.params.tokenId.toString()
+      ])
+    }
+  }
+  
+  if (shouldProcess) {
+    log.info("VELODROME: Processing IncreaseLiquidity for tokenId: {}, amount0: {}, amount1: {}", [
+      ev.params.tokenId.toString(),
+      ev.params.amount0.toString(),
+      ev.params.amount1.toString()
+    ])
+    
     // Use event amounts for accurate entry tracking
     refreshVeloCLPositionWithEventAmounts(
       ev.params.tokenId, 
@@ -66,6 +111,10 @@ export function handleIncreaseLiquidity(ev: IncreaseLiquidity): void {
       ev.params.amount1,
       ev.transaction.hash
     )
+  } else {
+    log.info("VELODROME: Skipping IncreaseLiquidity for tokenId: {} - not owned by safe", [
+      ev.params.tokenId.toString()
+    ])
   }
 }
 

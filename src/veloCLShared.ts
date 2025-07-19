@@ -140,6 +140,13 @@ export function refreshVeloCLPositionWithEventAmounts(
   eventAmount1: BigInt,
   txHash: Bytes = Bytes.empty()
 ): void {
+  log.info("VELODROME: refreshVeloCLPositionWithEventAmounts ENTRY - tokenId: {}, eventAmount0: {}, eventAmount1: {}, tx: {}", [
+    tokenId.toString(),
+    eventAmount0.toString(),
+    eventAmount1.toString(),
+    txHash.toHexString()
+  ])
+  
   const mgr = NonfungiblePositionManager.bind(VELO_MANAGER)
   
   // First, get the actual NFT owner
@@ -150,6 +157,11 @@ export function refreshVeloCLPositionWithEventAmounts(
   }
   
   const nftOwner = ownerResult.value
+  
+  log.info("VELODROME: NFT owner for tokenId {}: {}", [
+    tokenId.toString(),
+    nftOwner.toHexString()
+  ])
 
   // AGENT FILTERING: Only process positions owned by our Safe
   if (!isValidAgent(nftOwner)) {
@@ -159,6 +171,8 @@ export function refreshVeloCLPositionWithEventAmounts(
     ])
     return
   }
+  
+  log.info("VELODROME: Agent validation passed for tokenId: {}", [tokenId.toString()])
 
   const dataResult = mgr.try_positions(tokenId)
   
@@ -249,21 +263,40 @@ export function refreshVeloCLPositionWithEventAmounts(
       pp.entryAmountUSD.toString()
     ])
     
-    // For existing positions, update entry amounts if this is an IncreaseLiquidity event
-    // Add to existing entry amounts
-    pp.entryAmount0 = pp.entryAmount0.plus(eventAmount0Human)
-    pp.entryAmount0USD = pp.entryAmount0USD.plus(eventUsd0)
-    pp.entryAmount1 = pp.entryAmount1.plus(eventAmount1Human)
-    pp.entryAmount1USD = pp.entryAmount1USD.plus(eventUsd1)
-    pp.entryAmountUSD = pp.entryAmountUSD.plus(eventUsd)
-    
-    // DEBUG: Log what we're setting as entry amounts for existing positions
-    log.info("VELODROME: Position {} AFTER UPDATE - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
-      tokenId.toString(),
-      pp.entryAmount0.toString(),
-      pp.entryAmount1.toString(),
-      pp.entryAmountUSD.toString()
-    ])
+    // CRITICAL FIX: Check if this is the first IncreaseLiquidity event for this position
+    // The first IncreaseLiquidity event after position creation should set entry amounts
+    // Subsequent IncreaseLiquidity events should add to existing entry amounts
+    if (pp.entryAmountUSD.equals(BigDecimal.zero()) && pp.entryTimestamp.equals(BigInt.zero())) {
+      // This is the FIRST IncreaseLiquidity event for a new position - set initial entry amounts
+      pp.entryTxHash = txHash
+      pp.entryTimestamp = block.timestamp
+      pp.entryAmount0 = eventAmount0Human
+      pp.entryAmount0USD = eventUsd0
+      pp.entryAmount1 = eventAmount1Human
+      pp.entryAmount1USD = eventUsd1
+      pp.entryAmountUSD = eventUsd
+      
+      log.info("VELODROME: Position {} INITIAL ENTRY SET - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+        tokenId.toString(),
+        pp.entryAmount0.toString(),
+        pp.entryAmount1.toString(),
+        pp.entryAmountUSD.toString()
+      ])
+    } else {
+      // This is a subsequent IncreaseLiquidity event - add to existing entry amounts
+      pp.entryAmount0 = pp.entryAmount0.plus(eventAmount0Human)
+      pp.entryAmount0USD = pp.entryAmount0USD.plus(eventUsd0)
+      pp.entryAmount1 = pp.entryAmount1.plus(eventAmount1Human)
+      pp.entryAmount1USD = pp.entryAmount1USD.plus(eventUsd1)
+      pp.entryAmountUSD = pp.entryAmountUSD.plus(eventUsd)
+      
+      log.info("VELODROME: Position {} ENTRY INCREASED - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+        tokenId.toString(),
+        pp.entryAmount0.toString(),
+        pp.entryAmount1.toString(),
+        pp.entryAmountUSD.toString()
+      ])
+    }
     
     // Save the updated entry amounts first
     pp.save()

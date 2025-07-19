@@ -7,7 +7,7 @@ import {
 } from "../generated/VeloNFTManager/NonfungiblePositionManager"
 import { isSafe } from "./common"
 import { SAFE_ADDRESS, VELO_NFT_MANAGER } from "./config"
-import { ensurePoolTemplate, refreshVeloCLPosition, handleNFTTransferForCache } from "./veloCLShared"
+import { ensurePoolTemplate, refreshVeloCLPosition, refreshVeloCLPositionWithEventAmounts, handleNFTTransferForCache } from "./veloCLShared"
 import { isSafeOwnedNFT } from "./poolIndexCache"
 import { log, Address, Bytes } from "@graphprotocol/graph-ts"
 import { ProtocolPosition } from "../generated/schema"
@@ -58,7 +58,14 @@ export function handleIncreaseLiquidity(ev: IncreaseLiquidity): void {
   const isSafeOwned = isSafeOwnedNFT("velodrome-cl", ev.params.tokenId)
   
   if (isSafeOwned) {
-    refreshVeloCLPosition(ev.params.tokenId, ev.block, ev.transaction.hash)
+    // Use event amounts for accurate entry tracking
+    refreshVeloCLPositionWithEventAmounts(
+      ev.params.tokenId, 
+      ev.block, 
+      ev.params.amount0,
+      ev.params.amount1,
+      ev.transaction.hash
+    )
   }
 }
 

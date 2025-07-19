@@ -31,9 +31,11 @@ type ProtocolPosition @entity(immutable: false) {
   # Current state (only updated for active positions)
   usdCurrent: BigDecimal!   # Total USD value
   token0: Bytes
+  token0Symbol: String      # Token0 symbol (e.g., "USDC")
   amount0: BigDecimal       # Current token0 amount
   amount0USD: BigDecimal!   # Current USD value of token0
   token1: Bytes
+  token1Symbol: String      # Token1 symbol (e.g., "DAI")
   amount1: BigDecimal       # Current token1 amount  
   amount1USD: BigDecimal!   # Current USD value of token1
   liquidity: BigInt

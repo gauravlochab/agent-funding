@@ -10,6 +10,56 @@ import { getUsd, refreshPortfolio }   from "./common"
 import { addAgentNFTToPool, removeAgentNFTFromPool, getCachedPoolAddress, cachePoolAddress } from "./poolIndexCache"
 import { getTokenPriceUSD } from "./priceDiscovery"
 import { VELO_MANAGER, VELO_FACTORY } from "./constants"
+import { isValidAgent } from "./config"
+
+// Helper function to get token decimals
+function getTokenDecimals(tokenAddress: Address): i32 {
+  const tokenHex = tokenAddress.toHexString().toLowerCase()
+  
+  // hardcode Known token decimals on Optimism
+  if (tokenHex == "0x0b2c639c533813f4aa9d7837caf62653d097ff85") return 6  // USDC 
+  if (tokenHex == "0x7f5c764cbc14f9669b88837ca1490cca17c31607") return 6  // USDC.e
+  if (tokenHex == "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58") return 6  // USDT
+  if (tokenHex == "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1") return 18 // DAI
+  if (tokenHex == "0x4200000000000000000000000000000000000006") return 18 // WETH
+  if (tokenHex == "0x2e3d870790dc77a83dd1d18184acc7439a53f475") return 18 // FRAX
+  if (tokenHex == "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819") return 18 // LUSD
+  if (tokenHex == "0x8ae125e8653821e851f12a49f7765db9a9ce7384") return 18 // DOLA
+  if (tokenHex == "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b") return 18 // BOLD
+  if (tokenHex == "0x2218a117083f5b482b0bb821d27056ba9c04b1d3") return 18 // sDAI
+  
+  // Default to 18 decimals for unknown tokens
+  log.warning("VELODROME: Unknown token decimals for {}, defaulting to 18", [tokenHex])
+  return 18
+}
+
+// Helper function to get token symbol
+function getTokenSymbol(tokenAddress: Address): string {
+  const tokenHex = tokenAddress.toHexString().toLowerCase()
+  
+  // hardcode Known token symbols on Optimism
+  if (tokenHex == "0x0b2c639c533813f4aa9d7837caf62653d097ff85") return "USDC"
+  if (tokenHex == "0x7f5c764cbc14f9669b88837ca1490cca17c31607") return "USDC.e"
+  if (tokenHex == "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58") return "USDT"
+  if (tokenHex == "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1") return "DAI"
+  if (tokenHex == "0x4200000000000000000000000000000000000006") return "WETH"
+  if (tokenHex == "0x2e3d870790dc77a83dd1d18184acc7439a53f475") return "FRAX"
+  if (tokenHex == "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819") return "LUSD"
+  if (tokenHex == "0x8ae125e8653821e851f12a49f7765db9a9ce7384") return "DOLA"
+  if (tokenHex == "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b") return "BOLD"
+  if (tokenHex == "0x2218a117083f5b482b0bb821d27056ba9c04b1d3") return "sDAI"
+  
+  // Return the address as fallback for unknown tokens
+  log.warning("VELODROME: Unknown token symbol for {}, using address", [tokenHex])
+  return tokenHex
+}
+
+// Helper function to convert token amount from wei to human readable
+function convertTokenAmount(amount: BigInt, tokenAddress: Address): BigDecimal {
+  const decimals = getTokenDecimals(tokenAddress)
+  const divisor = BigDecimal.fromString("1e" + decimals.toString())
+  return amount.toBigDecimal().div(divisor)
+}
 
 // Helper function to derive pool address from position data with caching
 function getPoolAddress(token0: Address, token1: Address, tickSpacing: i32, tokenId: BigInt | null = null): Address {
@@ -82,7 +132,149 @@ function isPositionClosed(liquidity: BigInt, amount0: BigDecimal, amount1: BigDe
   return isLiquidityZero || areAmountsZero
 }
 
-// 2.  Re-price NFT into USD + persist
+// 2a. Re-price NFT into USD + persist using actual event amounts for entry data
+export function refreshVeloCLPositionWithEventAmounts(
+  tokenId: BigInt, 
+  block: ethereum.Block, 
+  eventAmount0: BigInt,
+  eventAmount1: BigInt,
+  txHash: Bytes = Bytes.empty()
+): void {
+  const mgr = NonfungiblePositionManager.bind(VELO_MANAGER)
+  
+  // First, get the actual NFT owner
+  const ownerResult = mgr.try_ownerOf(tokenId)
+  if (ownerResult.reverted) {
+    log.error("VELODROME: Failed to get owner for tokenId: {}", [tokenId.toString()])
+    return
+  }
+  
+  const nftOwner = ownerResult.value
+
+  // AGENT FILTERING: Only process positions owned by our Safe
+  if (!isValidAgent(nftOwner)) {
+    log.info("VELODROME: Skipping position {} - not owned by agent (owner: {})", [
+      tokenId.toString(),
+      nftOwner.toHexString()
+    ])
+    return
+  }
+
+  const dataResult = mgr.try_positions(tokenId)
+  
+  if (dataResult.reverted) {
+    log.error("VELODROME: positions() call failed for tokenId: {}", [tokenId.toString()])
+    return
+  }
+  
+  const data = dataResult.value
+
+  // Derive pool address from position data with caching  
+  const poolAddress = getPoolAddress(data.value2, data.value3, data.value4 as i32, tokenId)
+  
+  if (poolAddress.equals(Address.zero())) {
+    log.error("VELODROME: Failed to derive pool address for tokenId: {}", [tokenId.toString()])
+    return
+  }
+
+  // USD pricing for event amounts
+  const token0Price = getTokenPriceUSD(data.value2, block.timestamp, false)
+  const token1Price = getTokenPriceUSD(data.value3, block.timestamp, false)
+
+  // Convert event amounts from wei to human readable using proper decimals
+  const eventAmount0Human = convertTokenAmount(eventAmount0, data.value2) // token0
+  const eventAmount1Human = convertTokenAmount(eventAmount1, data.value3) // token1
+  
+  // Log the actual event amounts with transaction hash
+  log.info("VELODROME: Position {} event amounts from tx {} - amount0: {} ({}), amount1: {} ({})", [
+    tokenId.toString(),
+    txHash.toHexString(),
+    eventAmount0.toString(),
+    eventAmount0Human.toString(),
+    eventAmount1.toString(), 
+    eventAmount1Human.toString()
+  ])
+  
+  const eventUsd0 = eventAmount0Human.times(token0Price)
+  const eventUsd1 = eventAmount1Human.times(token1Price)
+  const eventUsd = eventUsd0.plus(eventUsd1)
+
+  // write ProtocolPosition - use actual NFT owner and event amounts for entry
+  const idString = nftOwner.toHex() + "-" + tokenId.toString()
+  const id = Bytes.fromUTF8(idString)
+  let pp = ProtocolPosition.load(id)
+  const isNewPosition = pp == null
+  
+  if (pp == null) {
+    pp = new ProtocolPosition(id)
+    pp.agent = nftOwner
+    pp.protocol = "velodrome-cl"
+    pp.pool = poolAddress
+    pp.tokenId = tokenId
+    pp.isActive = true
+    
+    // Set static position metadata
+    pp.tickLower = data.value5 as i32
+    pp.tickUpper = data.value6 as i32
+    pp.tickSpacing = data.value4
+    
+    // Set entry data using ACTUAL EVENT AMOUNTS (not calculated)
+    pp.entryTxHash = txHash
+    pp.entryTimestamp = block.timestamp
+    pp.entryAmount0 = eventAmount0Human  // Use actual event amount
+    pp.entryAmount0USD = eventUsd0       // Use actual event amount
+    pp.entryAmount1 = eventAmount1Human  // Use actual event amount
+    pp.entryAmount1USD = eventUsd1       // Use actual event amount
+    pp.entryAmountUSD = eventUsd
+    
+    // DEBUG: Log what we're setting as entry amounts
+    log.info("VELODROME: Position {} ENTRY AMOUNTS BEING SET - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+      tokenId.toString(),
+      pp.entryAmount0.toString(),
+      pp.entryAmount1.toString(),
+      pp.entryAmountUSD.toString()
+    ])
+    
+    // For new positions, calculate current amounts using liquidity math (not event amounts)
+    // Call refreshVeloCLPosition to get current calculated amounts
+    pp.save() // Save entry data first
+    refreshVeloCLPosition(tokenId, block, txHash) // This will update current amounts
+    return // Exit early since refreshVeloCLPosition will save the entity
+  } else {
+    // DEBUG: Log the BEFORE values to track accumulation
+    log.info("VELODROME: Position {} BEFORE UPDATE - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+      tokenId.toString(),
+      pp.entryAmount0.toString(),
+      pp.entryAmount1.toString(),
+      pp.entryAmountUSD.toString()
+    ])
+    
+    // For existing positions, update entry amounts if this is an IncreaseLiquidity event
+    // Add to existing entry amounts
+    pp.entryAmount0 = pp.entryAmount0.plus(eventAmount0Human)
+    pp.entryAmount0USD = pp.entryAmount0USD.plus(eventUsd0)
+    pp.entryAmount1 = pp.entryAmount1.plus(eventAmount1Human)
+    pp.entryAmount1USD = pp.entryAmount1USD.plus(eventUsd1)
+    pp.entryAmountUSD = pp.entryAmountUSD.plus(eventUsd)
+    
+    // DEBUG: Log what we're setting as entry amounts for existing positions
+    log.info("VELODROME: Position {} AFTER UPDATE - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+      tokenId.toString(),
+      pp.entryAmount0.toString(),
+      pp.entryAmount1.toString(),
+      pp.entryAmountUSD.toString()
+    ])
+    
+    // Save the updated entry amounts first
+    pp.save()
+    
+    // Update current amounts by calling the regular refresh function
+    refreshVeloCLPosition(tokenId, block, txHash)
+    return // Exit early since refreshVeloCLPosition will save the entity
+  }
+}
+
+// 2b. Re-price NFT into USD + persist (for non-entry events)
 export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, txHash: Bytes = Bytes.empty()): void {
   const mgr = NonfungiblePositionManager.bind(VELO_MANAGER)
   
@@ -94,6 +286,15 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
   }
   
   const nftOwner = ownerResult.value
+
+  // AGENT FILTERING: Only process positions owned by our Safe
+  if (!isValidAgent(nftOwner)) {
+    log.info("VELODROME: Skipping position {} - not owned by agent (owner: {})", [
+      tokenId.toString(),
+      nftOwner.toHexString()
+    ])
+    return
+  }
 
   // Early check - don't process closed positions
   const idString = nftOwner.toHex() + "-" + tokenId.toString()
@@ -146,9 +347,18 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
   const token0Price = getTokenPriceUSD(data.value2, block.timestamp, false) // token0
   const token1Price = getTokenPriceUSD(data.value3, block.timestamp, false) // token1
 
-  // Convert amounts from wei to human readable (6 decimals for USDC)
-  const amount0Human = amounts.amount0.toBigDecimal().div(BigDecimal.fromString("1e6"))
-  const amount1Human = amounts.amount1.toBigDecimal().div(BigDecimal.fromString("1e6"))
+  // Convert amounts from wei to human readable using proper decimals
+  const amount0Human = convertTokenAmount(amounts.amount0, data.value2) // token0
+  const amount1Human = convertTokenAmount(amounts.amount1, data.value3) // token1
+  
+  // Add debugging logs to track the conversion
+  log.info("VELODROME: Position {} amounts - token0: {} ({}), token1: {} ({})", [
+    tokenId.toString(),
+    amounts.amount0.toString(),
+    amount0Human.toString(),
+    amounts.amount1.toString(), 
+    amount1Human.toString()
+  ])
   
   const usd0 = amount0Human.times(token0Price)
   const usd1 = amount1Human.times(token1Price)
@@ -171,22 +381,29 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
     pp.tickUpper = tickUpper
     pp.tickSpacing = data.value4
     
-    // Set entry data for new positions
-    pp.entryTxHash = txHash
-    pp.entryTimestamp = block.timestamp
-    pp.entryAmount0 = amount0Human
-    pp.entryAmount0USD = usd0
-    pp.entryAmount1 = amount1Human
-    pp.entryAmount1USD = usd1
-    pp.entryAmountUSD = usd
+    // CRITICAL FIX: Initialize entry data to ZERO for new positions
+    // Entry amounts should ONLY be set by refreshVeloCLPositionWithEventAmounts
+    pp.entryTxHash = Bytes.empty()
+    pp.entryTimestamp = BigInt.zero()
+    pp.entryAmount0 = BigDecimal.zero()
+    pp.entryAmount0USD = BigDecimal.zero()
+    pp.entryAmount1 = BigDecimal.zero()
+    pp.entryAmount1USD = BigDecimal.zero()
+    pp.entryAmountUSD = BigDecimal.zero()
+    
+    log.info("VELODROME: Position {} created with ZERO entry amounts - will be set by event processing", [
+      tokenId.toString()
+    ])
   }
   
   // Update current state (for both new and existing positions)
   pp.usdCurrent = usd
   pp.token0     = data.value2
+  pp.token0Symbol = getTokenSymbol(data.value2)
   pp.amount0    = amount0Human
   pp.amount0USD = usd0
   pp.token1     = data.value3
+  pp.token1Symbol = getTokenSymbol(data.value3)
   pp.amount1    = amount1Human
   pp.amount1USD = usd1
   pp.liquidity  = data.value7

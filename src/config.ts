@@ -23,3 +23,9 @@ export const USDC_USD_FEED = Address.fromString("0x16a9FA2FDa030272Ce99B29CF780d
 
 // Other contract addresses
 export const VELO_NFT_MANAGER = Address.fromString("0x416b433906b1B72FA758e166e239c43d68dC6F29")
+
+// Agent validation function - only allow positions owned by the Safe
+export function isValidAgent(address: Address): boolean {
+  const addressHex = address.toHexString().toLowerCase()
+  return addressHex == SAFE_ADDRESS_HEX.toLowerCase()
+}

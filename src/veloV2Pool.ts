@@ -8,14 +8,18 @@ import {
 import { 
   refreshVeloV2PositionWithEventAmounts,
   refreshVeloV2PositionWithBurnAmounts,
-  refreshVeloV2Position
+  refreshVeloV2Position,
+  ensureVeloV2PoolTemplate
 } from "./veloV2Shared"
 
 import { log } from "@graphprotocol/graph-ts"
+import { isSafe } from "./common"
 
 // Handle VelodromeV2 Pool Mint events (liquidity additions)
 export function handleVeloV2Mint(event: Mint): void {
-  log.info("VELODROME V2: Mint event - pool: {}, sender: {}, amount0: {}, amount1: {}, txFrom: {}, txHash: {}, block: {}", [
+  // We don't create positions from Mint events
+  // Instead, we wait for the Transfer event to see who receives the LP tokens
+  log.warning("VELODROME V2 MINT: Event triggered - pool: {}, sender: {}, amount0: {}, amount1: {}, txFrom: {}, txHash: {}, block: {}", [
     event.address.toHexString(),
     event.params.sender.toHexString(),
     event.params.amount0.toString(),
@@ -25,37 +29,36 @@ export function handleVeloV2Mint(event: Mint): void {
     event.block.number.toString()
   ])
   
-  // The sender in VelodromeV2 Mint events is typically the Router contract
-  // We need to track the actual user who initiated the addLiquidity call
-  // This is usually available in the transaction's from address
-  const userAddress = event.transaction.from
-  
-  refreshVeloV2PositionWithEventAmounts(
-    userAddress,
-    event.address, // pool address
-    event.block,
-    event.params.amount0,
-    event.params.amount1,
-    event.transaction.hash
-  )
+  log.warning("VELODROME V2 MINT: Waiting for Transfer event to determine LP token recipient", [])
 }
 
 // Handle VelodromeV2 Pool Burn events (liquidity removals)
 export function handleVeloV2Burn(event: Burn): void {
-  log.info("VELODROME V2: Burn event - pool: {}, sender: {}, to: {}, amount0: {}, amount1: {}, txFrom: {}, txHash: {}, block: {}", [
+  log.warning("===== VELODROME V2 BURN EVENT START =====", [])
+  log.warning("VELODROME V2 BURN: Block: {}, TxHash: {}", [
+    event.block.number.toString(),
+    event.transaction.hash.toHexString()
+  ])
+  log.warning("VELODROME V2 BURN: Pool: {}, Sender: {}, To: {}", [
     event.address.toHexString(),
     event.params.sender.toHexString(),
-    event.params.to.toHexString(),
+    event.params.to.toHexString()
+  ])
+  log.warning("VELODROME V2 BURN: Amounts - amount0: {}, amount1: {}", [
     event.params.amount0.toString(),
-    event.params.amount1.toString(),
-    event.transaction.from.toHexString(),
-    event.transaction.hash.toHexString(),
-    event.block.number.toString()
+    event.params.amount1.toString()
+  ])
+  log.warning("VELODROME V2 BURN: Transaction from: {}", [
+    event.transaction.from.toHexString()
   ])
   
   // The 'to' address is where the tokens are being sent (usually the user)
   // But we should also check the transaction from address
   const userAddress = event.transaction.from
+  
+  log.warning("VELODROME V2 BURN: Refreshing position for user: {}", [
+    userAddress.toHexString()
+  ])
   
   refreshVeloV2PositionWithBurnAmounts(
     userAddress,
@@ -65,6 +68,8 @@ export function handleVeloV2Burn(event: Burn): void {
     event.params.amount1,
     event.transaction.hash
   )
+  
+  log.warning("===== VELODROME V2 BURN EVENT END =====", [])
 }
 
 // Handle VelodromeV2 Pool Sync events (pool state updates)
@@ -89,7 +94,8 @@ export function handleVeloV2Transfer(event: Transfer): void {
   const to = event.params.to
   const value = event.params.value
   
-  log.info("VELODROME V2: Transfer event - pool: {}, from: {}, to: {}, value: {}, txFrom: {}, txHash: {}, block: {}", [
+  log.warning("VELODROME V2 POOL: Transfer event triggered for pool {}!", [event.address.toHexString()])
+  log.warning("VELODROME V2 POOL: Transfer event - pool: {}, from: {}, to: {}, value: {}, txFrom: {}, txHash: {}, block: {}", [
     event.address.toHexString(),
     from.toHexString(),
     to.toHexString(),
@@ -102,6 +108,13 @@ export function handleVeloV2Transfer(event: Transfer): void {
   // Handle minting (from zero address)
   if (from.toHexString() == "0x0000000000000000000000000000000000000000") {
     // This is a mint to the 'to' address
+    log.warning("VELODROME V2 POOL: LP tokens minted to {}", [to.toHexString()])
+    
+    // Ensure pool template exists before processing position
+    if (isSafe(to)) {
+      ensureVeloV2PoolTemplate(event.address)
+    }
+    
     refreshVeloV2Position(to, event.address, event.block, event.transaction.hash)
     return
   }
@@ -114,6 +127,11 @@ export function handleVeloV2Transfer(event: Transfer): void {
   }
   
   // Handle regular transfers between addresses
+  // Ensure template exists if Safe is involved
+  if (isSafe(from) || isSafe(to)) {
+    ensureVeloV2PoolTemplate(event.address)
+  }
+  
   // Update both sender and receiver positions
   refreshVeloV2Position(from, event.address, event.block, event.transaction.hash)
   refreshVeloV2Position(to, event.address, event.block, event.transaction.hash)

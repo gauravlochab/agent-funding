@@ -76,10 +76,15 @@ function toHumanAmount(amount: BigInt, decimals: i32): BigDecimal {
 export function ensureVeloV2PoolTemplate(poolAddress: Address): void {
   const poolKey = poolAddress.toHexString()
   
+  log.warning("VELODROME V2 TEMPLATE: ensureVeloV2PoolTemplate called for pool {}", [poolKey])
+  
   if (!poolCache.has(poolKey)) {
-    log.info("VELODROME V2: Creating pool template for {}", [poolKey])
+    log.warning("VELODROME V2 TEMPLATE: Creating NEW pool template for {} - this will start tracking all events for this pool", [poolKey])
     VeloV2PoolTemplate.create(poolAddress)
     poolCache.set(poolKey, true)
+    log.warning("VELODROME V2 TEMPLATE: Pool template CREATED successfully for {}", [poolKey])
+  } else {
+    log.warning("VELODROME V2 TEMPLATE: Pool template already exists for {} - skipping creation", [poolKey])
   }
 }
 
@@ -102,10 +107,15 @@ export function refreshVeloV2PositionWithEventAmounts(
   const positionId = getVeloV2PositionId(userAddress, poolAddress)
   
   // Only track positions owned by our Safe
+  log.warning("VELODROME V2 SHARED: Checking if address {} is Safe", [userAddress.toHexString()])
   if (!isSafe(userAddress)) {
-    log.info("VELODROME V2: Skipping position for non-safe address {}", [userAddress.toHexString()])
+    log.warning("VELODROME V2 SHARED: Skipping position for non-safe address {} (Safe is {})", [
+      userAddress.toHexString(),
+      SAFE_ADDRESS.toHexString()
+    ])
     return
   }
+  log.warning("VELODROME V2 SHARED: Address {} IS the Safe, proceeding with position creation", [userAddress.toHexString()])
   
   let pp = ProtocolPosition.load(positionId)
   if (!pp) {
@@ -138,6 +148,25 @@ export function refreshVeloV2PositionWithEventAmounts(
     pp.tickUpper = 0
     pp.tickSpacing = 0 // Not applicable for VelodromeV2
     pp.fee = 0 // Will be set based on pool type
+    
+    // Get pool metadata
+    const poolContract = VelodromeV2Pool.bind(poolAddress)
+    
+    const token0Result = poolContract.try_token0()
+    const token1Result = poolContract.try_token1()
+    const stableResult = poolContract.try_stable()
+    
+    if (!token0Result.reverted && !token1Result.reverted) {
+      pp.token0 = token0Result.value
+      pp.token1 = token1Result.value
+      pp.token0Symbol = getTokenSymbol(token0Result.value)
+      pp.token1Symbol = getTokenSymbol(token1Result.value)
+      
+      // Set fee based on pool type (stable vs volatile)
+      if (!stableResult.reverted) {
+        pp.fee = stableResult.value ? 5 : 30 // 0.05% for stable, 0.30% for volatile
+      }
+    }
   }
   
   // Get pool metadata if not already set
@@ -229,10 +258,78 @@ export function refreshVeloV2Position(
 ): void {
   const positionId = getVeloV2PositionId(userAddress, poolAddress)
   
+  // Only track positions owned by our Safe
+  log.warning("VELODROME V2 REFRESH: Checking if address {} is Safe (Safe address: {})", [
+    userAddress.toHexString(),
+    SAFE_ADDRESS.toHexString()
+  ])
+  
+  if (!isSafe(userAddress)) {
+    log.warning("VELODROME V2 REFRESH: Skipping refresh for non-safe address {}", [userAddress.toHexString()])
+    return
+  }
+  
+  log.warning("VELODROME V2 REFRESH: Address {} IS the Safe, proceeding with refresh", [userAddress.toHexString()])
+  
   let pp = ProtocolPosition.load(positionId)
   if (!pp) {
-    log.warning("VELODROME V2: Position {} not found for refresh", [positionId.toHexString()])
-    return
+    log.warning("VELODROME V2 REFRESH: Position {} not found, creating new position for pool {}", [
+      positionId.toHexString(),
+      poolAddress.toHexString()
+    ])
+    
+    // Create a new position if it doesn't exist
+    pp = new ProtocolPosition(positionId)
+    pp.agent = userAddress
+    pp.protocol = "velodrome-v2"
+    pp.pool = poolAddress
+    pp.isActive = true
+    pp.tokenId = BigInt.zero() // VelodromeV2 doesn't use tokenIds
+    
+    // Initialize all required fields
+    pp.usdCurrent = BigDecimal.zero()
+    pp.amount0 = BigDecimal.zero()
+    pp.amount0USD = BigDecimal.zero()
+    pp.amount1 = BigDecimal.zero()
+    pp.amount1USD = BigDecimal.zero()
+    pp.liquidity = BigInt.zero()
+    
+    // Initialize entry tracking fields
+    pp.entryTxHash = txHash
+    pp.entryTimestamp = block.timestamp
+    pp.entryAmount0 = BigDecimal.zero()
+    pp.entryAmount0USD = BigDecimal.zero()
+    pp.entryAmount1 = BigDecimal.zero()
+    pp.entryAmount1USD = BigDecimal.zero()
+    pp.entryAmountUSD = BigDecimal.zero()
+    
+    // Initialize static metadata fields
+    pp.tickLower = 0
+    pp.tickUpper = 0
+    pp.tickSpacing = 0 // Not applicable for VelodromeV2
+    pp.fee = 0 // Will be set based on pool type
+    
+    // Get pool metadata for new position
+    const poolContract = VelodromeV2Pool.bind(poolAddress)
+    
+    const token0Result = poolContract.try_token0()
+    const token1Result = poolContract.try_token1()
+    const stableResult = poolContract.try_stable()
+    
+    if (!token0Result.reverted && !token1Result.reverted) {
+      pp.token0 = token0Result.value
+      pp.token1 = token1Result.value
+      pp.token0Symbol = getTokenSymbol(token0Result.value)
+      pp.token1Symbol = getTokenSymbol(token1Result.value)
+      
+      // Set fee based on pool type (stable vs volatile)
+      if (!stableResult.reverted) {
+        pp.fee = stableResult.value ? 5 : 30 // 0.05% for stable, 0.30% for volatile
+      }
+    } else {
+      log.warning("VELODROME V2 REFRESH: Failed to get token addresses for pool {}", [poolAddress.toHexString()])
+      return
+    }
   }
   
   const poolContract = VelodromeV2Pool.bind(poolAddress)

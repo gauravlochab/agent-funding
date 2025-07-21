@@ -1,0 +1,352 @@
+import { 
+  BigInt, 
+  BigDecimal, 
+  Address, 
+  Bytes,
+  ethereum,
+  log
+} from "@graphprotocol/graph-ts"
+
+import { ProtocolPosition } from "../generated/schema"
+import { VelodromeV2Pool } from "../generated/templates/VeloV2Pool/VelodromeV2Pool"
+import { VeloV2Pool as VeloV2PoolTemplate } from "../generated/templates"
+import { getTokenPriceUSD } from "./priceDiscovery"
+import { isSafe } from "./common"
+
+// VelodromeV2 Router address on Optimism
+const VELODROME_V2_ROUTER = Address.fromString("0xa062ae8a9c5e11aaa026fc2670b0d65ccc8b2858")
+const SAFE_ADDRESS = Address.fromString("0xc8e264f402ae94f69bdef8b1f035f7200cd2b0c7")
+
+// Cache for VelodromeV2 pools to avoid repeated RPC calls
+let poolCache = new Map<string, bool>()
+
+// Helper function to get token decimals (reuse existing logic)
+function getTokenDecimals(tokenAddress: Address): i32 {
+  const tokenHex = tokenAddress.toHexString().toLowerCase()
+  
+  // Known token decimals on Optimism (same as existing code)
+  if (tokenHex == "0x0b2c639c533813f4aa9d7837caf62653d097ff85") return 6  // USDC
+  if (tokenHex == "0x7f5c764cbc14f9669b88837ca1490cca17c31607") return 6  // USDC.e
+  if (tokenHex == "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58") return 6  // USDT
+  if (tokenHex == "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1") return 18 // DAI
+  if (tokenHex == "0x4200000000000000000000000000000000000006") return 18 // WETH
+  if (tokenHex == "0x2e3d870790dc77a83dd1d18184acc7439a53f475") return 18 // FRAX
+  if (tokenHex == "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819") return 18 // LUSD
+  if (tokenHex == "0x8ae125e8653821e851f12a49f7765db9a9ce7384") return 18 // DOLA
+  if (tokenHex == "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b") return 18 // BOLD
+  if (tokenHex == "0x2218a117083f5b482b0bb821d27056ba9c04b1d3") return 18 // sDAI
+  
+  // Default to 18 decimals for unknown tokens
+  log.warning("VELODROME V2: Unknown token decimals for {}, defaulting to 18", [tokenHex])
+  return 18
+}
+
+// Helper function to get token symbol (reuse existing logic)
+function getTokenSymbol(tokenAddress: Address): string {
+  const tokenHex = tokenAddress.toHexString().toLowerCase()
+  
+  // Known token symbols on Optimism (same as existing code)
+  if (tokenHex == "0x0b2c639c533813f4aa9d7837caf62653d097ff85") return "USDC"
+  if (tokenHex == "0x7f5c764cbc14f9669b88837ca1490cca17c31607") return "USDC.e"
+  if (tokenHex == "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58") return "USDT"
+  if (tokenHex == "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1") return "DAI"
+  if (tokenHex == "0x4200000000000000000000000000000000000006") return "WETH"
+  if (tokenHex == "0x2e3d870790dc77a83dd1d18184acc7439a53f475") return "FRAX"
+  if (tokenHex == "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819") return "LUSD"
+  if (tokenHex == "0x8ae125e8653821e851f12a49f7765db9a9ce7384") return "DOLA"
+  if (tokenHex == "0x087c440f251ff6cfe62b86dde1be558b95b4bb9b") return "BOLD"
+  if (tokenHex == "0x2218a117083f5b482b0bb821d27056ba9c04b1d3") return "sDAI"
+  
+  // Return the address as fallback for unknown tokens
+  log.warning("VELODROME V2: Unknown token symbol for {}, using address", [tokenHex])
+  return tokenAddress.toHexString()
+}
+
+// Helper function to convert token amount to human readable format
+function toHumanAmount(amount: BigInt, decimals: i32): BigDecimal {
+  if (amount.equals(BigInt.zero())) {
+    return BigDecimal.zero()
+  }
+  
+  let divisor = BigInt.fromI32(10).pow(decimals as u8)
+  return amount.toBigDecimal().div(divisor.toBigDecimal())
+}
+
+// Ensure pool template is created for tracking events
+export function ensureVeloV2PoolTemplate(poolAddress: Address): void {
+  const poolKey = poolAddress.toHexString()
+  
+  if (!poolCache.has(poolKey)) {
+    log.info("VELODROME V2: Creating pool template for {}", [poolKey])
+    VeloV2PoolTemplate.create(poolAddress)
+    poolCache.set(poolKey, true)
+  }
+}
+
+// Create or get VelodromeV2 position ID
+export function getVeloV2PositionId(userAddress: Address, poolAddress: Address): Bytes {
+  // For VelodromeV2, we use user-pool combination as position ID since there are no NFTs
+  const positionId = userAddress.toHex() + "-velodromev2-" + poolAddress.toHex()
+  return Bytes.fromUTF8(positionId)
+}
+
+// Refresh VelodromeV2 position with event amounts (for Mint events)
+export function refreshVeloV2PositionWithEventAmounts(
+  userAddress: Address,
+  poolAddress: Address, 
+  block: ethereum.Block,
+  eventAmount0: BigInt,
+  eventAmount1: BigInt,
+  txHash: Bytes
+): void {
+  const positionId = getVeloV2PositionId(userAddress, poolAddress)
+  
+  // Only track positions owned by our Safe
+  if (!isSafe(userAddress)) {
+    log.info("VELODROME V2: Skipping position for non-safe address {}", [userAddress.toHexString()])
+    return
+  }
+  
+  let pp = ProtocolPosition.load(positionId)
+  if (!pp) {
+    pp = new ProtocolPosition(positionId)
+    pp.agent = userAddress
+    pp.protocol = "velodrome-v2"
+    pp.pool = poolAddress
+    pp.isActive = true
+    pp.tokenId = BigInt.zero() // VelodromeV2 doesn't use tokenIds
+    
+    // Initialize all required fields
+    pp.usdCurrent = BigDecimal.zero()
+    pp.amount0 = BigDecimal.zero()
+    pp.amount0USD = BigDecimal.zero()
+    pp.amount1 = BigDecimal.zero()
+    pp.amount1USD = BigDecimal.zero()
+    pp.liquidity = BigInt.zero()
+    
+    // Initialize entry tracking fields
+    pp.entryTxHash = Bytes.empty()
+    pp.entryTimestamp = BigInt.zero()
+    pp.entryAmount0 = BigDecimal.zero()
+    pp.entryAmount0USD = BigDecimal.zero()
+    pp.entryAmount1 = BigDecimal.zero()
+    pp.entryAmount1USD = BigDecimal.zero()
+    pp.entryAmountUSD = BigDecimal.zero()
+    
+    // Initialize static metadata fields
+    pp.tickLower = 0
+    pp.tickUpper = 0
+    pp.tickSpacing = 0 // Not applicable for VelodromeV2
+    pp.fee = 0 // Will be set based on pool type
+  }
+  
+  // Get pool metadata if not already set
+  if (!pp.token0) {
+    const poolContract = VelodromeV2Pool.bind(poolAddress)
+    
+    const token0Result = poolContract.try_token0()
+    const token1Result = poolContract.try_token1()
+    const stableResult = poolContract.try_stable()
+    
+    if (!token0Result.reverted && !token1Result.reverted) {
+      pp.token0 = token0Result.value
+      pp.token1 = token1Result.value
+      pp.token0Symbol = getTokenSymbol(token0Result.value)
+      pp.token1Symbol = getTokenSymbol(token1Result.value)
+      
+      // Set fee based on pool type (stable vs volatile)
+      if (!stableResult.reverted) {
+        pp.fee = stableResult.value ? 5 : 30 // 0.05% for stable, 0.30% for volatile
+      }
+    }
+  }
+  
+  // Convert event amounts to human readable format
+  const token0Decimals = getTokenDecimals(Address.fromBytes(pp.token0!))
+  const token1Decimals = getTokenDecimals(Address.fromBytes(pp.token1!))
+  
+  const eventAmount0Human = toHumanAmount(eventAmount0, token0Decimals)
+  const eventAmount1Human = toHumanAmount(eventAmount1, token1Decimals)
+  
+  // Get USD values
+  const eventUsd0 = getTokenPriceUSD(Address.fromBytes(pp.token0!), block.timestamp, false).times(eventAmount0Human)
+  const eventUsd1 = getTokenPriceUSD(Address.fromBytes(pp.token1!), block.timestamp, false).times(eventAmount1Human)
+  const eventUsd = eventUsd0.plus(eventUsd1)
+  
+  log.info("VELODROME V2: Processing position {} - eventAmount0: {}, eventAmount1: {}, eventUsd: {}", [
+    positionId.toHexString(),
+    eventAmount0Human.toString(),
+    eventAmount1Human.toString(),
+    eventUsd.toString()
+  ])
+  
+  // Check if this is the first time adding liquidity (new position)
+  if (pp.entryAmountUSD.equals(BigDecimal.zero()) && pp.entryTimestamp.equals(BigInt.zero())) {
+    // This is the FIRST Mint event for a new position - set initial entry amounts
+    pp.entryTxHash = txHash
+    pp.entryTimestamp = block.timestamp
+    pp.entryAmount0 = eventAmount0Human
+    pp.entryAmount0USD = eventUsd0
+    pp.entryAmount1 = eventAmount1Human
+    pp.entryAmount1USD = eventUsd1
+    pp.entryAmountUSD = eventUsd
+    
+    log.info("VELODROME V2: Position {} INITIAL ENTRY SET - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+      positionId.toHexString(),
+      pp.entryAmount0.toString(),
+      pp.entryAmount1.toString(),
+      pp.entryAmountUSD.toString()
+    ])
+  } else {
+    // This is a subsequent Mint event - add to existing entry amounts
+    pp.entryAmount0 = pp.entryAmount0.plus(eventAmount0Human)
+    pp.entryAmount0USD = pp.entryAmount0USD.plus(eventUsd0)
+    pp.entryAmount1 = pp.entryAmount1.plus(eventAmount1Human)
+    pp.entryAmount1USD = pp.entryAmount1USD.plus(eventUsd1)
+    pp.entryAmountUSD = pp.entryAmountUSD.plus(eventUsd)
+    
+    log.info("VELODROME V2: Position {} ENTRY INCREASED - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+      positionId.toHexString(),
+      pp.entryAmount0.toString(),
+      pp.entryAmount1.toString(),
+      pp.entryAmountUSD.toString()
+    ])
+  }
+  
+  // Save the updated entry amounts first
+  pp.save()
+  
+  // Update current amounts by calling the regular refresh function
+  refreshVeloV2Position(userAddress, poolAddress, block, txHash)
+}
+
+// Refresh VelodromeV2 position (for current state updates)
+export function refreshVeloV2Position(
+  userAddress: Address,
+  poolAddress: Address,
+  block: ethereum.Block,
+  txHash: Bytes
+): void {
+  const positionId = getVeloV2PositionId(userAddress, poolAddress)
+  
+  let pp = ProtocolPosition.load(positionId)
+  if (!pp) {
+    log.warning("VELODROME V2: Position {} not found for refresh", [positionId.toHexString()])
+    return
+  }
+  
+  const poolContract = VelodromeV2Pool.bind(poolAddress)
+  
+  // Get user's LP token balance
+  const balanceResult = poolContract.try_balanceOf(userAddress)
+  const totalSupplyResult = poolContract.try_totalSupply()
+  const reservesResult = poolContract.try_getReserves()
+  
+  if (balanceResult.reverted || totalSupplyResult.reverted || reservesResult.reverted) {
+    log.warning("VELODROME V2: Failed to get pool data for {}", [poolAddress.toHexString()])
+    return
+  }
+  
+  const userBalance = balanceResult.value
+  const totalSupply = totalSupplyResult.value
+  const reserves = reservesResult.value
+  
+  // If user has no LP tokens, mark position as inactive
+  if (userBalance.equals(BigInt.zero())) {
+    pp.isActive = false
+    pp.usdCurrent = BigDecimal.zero()
+    pp.amount0 = BigDecimal.zero()
+    pp.amount0USD = BigDecimal.zero()
+    pp.amount1 = BigDecimal.zero()
+    pp.amount1USD = BigDecimal.zero()
+    pp.liquidity = BigInt.zero()
+    
+    log.info("VELODROME V2: Position {} marked inactive - no LP tokens", [positionId.toHexString()])
+  } else {
+    // Calculate user's share of the pool
+    const userShare = userBalance.toBigDecimal().div(totalSupply.toBigDecimal())
+    
+    // Calculate current token amounts based on reserves and user's share
+    const token0Decimals = getTokenDecimals(Address.fromBytes(pp.token0!))
+    const token1Decimals = getTokenDecimals(Address.fromBytes(pp.token1!))
+    
+    const reserve0Human = toHumanAmount(reserves.value0, token0Decimals)
+    const reserve1Human = toHumanAmount(reserves.value1, token1Decimals)
+    
+    pp.amount0 = reserve0Human.times(userShare)
+    pp.amount1 = reserve1Human.times(userShare)
+    
+    // Calculate USD values
+    pp.amount0USD = getTokenPriceUSD(Address.fromBytes(pp.token0!), block.timestamp, false).times(pp.amount0!)
+    pp.amount1USD = getTokenPriceUSD(Address.fromBytes(pp.token1!), block.timestamp, false).times(pp.amount1!)
+    pp.usdCurrent = pp.amount0USD.plus(pp.amount1USD)
+    pp.liquidity = userBalance // Store LP token balance as liquidity
+    
+    pp.isActive = true
+    
+    log.info("VELODROME V2: Position {} UPDATED - amount0: {}, amount1: {}, usdCurrent: {}", [
+      positionId.toHexString(),
+      pp.amount0!.toString(),
+      pp.amount1!.toString(),
+      pp.usdCurrent.toString()
+    ])
+  }
+  
+  pp.save()
+}
+
+// Handle VelodromeV2 Burn events (liquidity removal)
+export function refreshVeloV2PositionWithBurnAmounts(
+  userAddress: Address,
+  poolAddress: Address,
+  block: ethereum.Block,
+  eventAmount0: BigInt,
+  eventAmount1: BigInt,
+  txHash: Bytes
+): void {
+  const positionId = getVeloV2PositionId(userAddress, poolAddress)
+  
+  // Only track positions owned by our Safe
+  if (!isSafe(userAddress)) {
+    log.info("VELODROME V2: Skipping burn for non-safe address {}", [userAddress.toHexString()])
+    return
+  }
+  
+  let pp = ProtocolPosition.load(positionId)
+  if (!pp) {
+    log.warning("VELODROME V2: Position {} not found for burn", [positionId.toHexString()])
+    return
+  }
+  
+  // Convert event amounts to human readable format
+  const token0Decimals = getTokenDecimals(Address.fromBytes(pp.token0!))
+  const token1Decimals = getTokenDecimals(Address.fromBytes(pp.token1!))
+  
+  const eventAmount0Human = toHumanAmount(eventAmount0, token0Decimals)
+  const eventAmount1Human = toHumanAmount(eventAmount1, token1Decimals)
+  
+  // Get USD values for exit tracking
+  const eventUsd0 = getTokenPriceUSD(Address.fromBytes(pp.token0!), block.timestamp, false).times(eventAmount0Human)
+  const eventUsd1 = getTokenPriceUSD(Address.fromBytes(pp.token1!), block.timestamp, false).times(eventAmount1Human)
+  const eventUsd = eventUsd0.plus(eventUsd1)
+  
+  log.info("VELODROME V2: Processing burn for position {} - amount0: {}, amount1: {}, usd: {}", [
+    positionId.toHexString(),
+    eventAmount0Human.toString(),
+    eventAmount1Human.toString(),
+    eventUsd.toString()
+  ])
+  
+  // Update exit tracking (if this is the final burn, these will be the exit amounts)
+  pp.exitTxHash = txHash
+  pp.exitTimestamp = block.timestamp
+  pp.exitAmount0 = eventAmount0Human
+  pp.exitAmount0USD = eventUsd0
+  pp.exitAmount1 = eventAmount1Human
+  pp.exitAmount1USD = eventUsd1
+  pp.exitAmountUSD = eventUsd
+  
+  // Save and refresh current state
+  pp.save()
+  refreshVeloV2Position(userAddress, poolAddress, block, txHash)
+}

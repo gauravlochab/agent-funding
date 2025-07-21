@@ -8,7 +8,7 @@ dataSources:
     source:
       address: "0x4b00f1a232c28254223c8c177e997ab298e1e40a"
       abi: Safe
-      startBlock: 136960000
+      startBlock: 136964300
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -32,7 +32,7 @@ dataSources:
     source:
       address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
       abi: ERC20
-      startBlock: 136960000
+      startBlock: 136964300
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -54,7 +54,7 @@ dataSources:
     source:
       address: "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"
       abi: ERC20
-      startBlock: 136960000
+      startBlock: 136964300
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -76,7 +76,7 @@ dataSources:
     source:
       address: "0x416b433906b1B72FA758e166e239c43d68dC6F29"
       abi: NonfungiblePositionManager
-      startBlock: 136960000
+      startBlock: 136964300
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -102,6 +102,42 @@ dataSources:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleNFTTransfer
       file: ./src/veloNFTManager.ts
+  - kind: ethereum
+    name: UniV3NFTManager
+    network: optimism
+    source:
+      address: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
+      abi: NonfungiblePositionManager
+      startBlock: 136964300
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - ProtocolPosition
+      abis:
+        - name: NonfungiblePositionManager
+          file: ./abis/UniswapV3NFTManager.json
+        - name: UniswapV3Factory
+          file: ./abis/UniswapV3Factory.json
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+        - name: VelodromeCLPool
+          file: ./abis/VelodromeCLPool.json
+        - name: VelodromeCLFactory
+          file: ./abis/VelodromeCLFactory.json
+        - name: AggregatorV3Interface
+          file: ./abis/AggregatorV3Interface.json
+      eventHandlers:
+        - event: IncreaseLiquidity(indexed uint256,uint128,uint256,uint256)
+          handler: handleUniV3IncreaseLiquidity
+        - event: DecreaseLiquidity(indexed uint256,uint128,uint256,uint256)
+          handler: handleUniV3DecreaseLiquidity
+        - event: Collect(indexed uint256,address,uint256,uint256)
+          handler: handleUniV3Collect
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleUniV3Transfer
+      file: ./src/uniV3NFTManager.ts
 templates:
   - kind: ethereum/contract
     name: VeloCLPool
@@ -123,3 +159,23 @@ templates:
         - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
           handler: handleSwap
       file: ./src/veloCLPool.ts
+  - kind: ethereum/contract
+    name: UniV3Pool
+    network: optimism
+    source:
+      abi: UniswapV3Pool
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - ProtocolPosition
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+        - name: AggregatorV3Interface
+          file: ./abis/AggregatorV3Interface.json
+      eventHandlers:
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleUniV3Swap
+      file: ./src/uniV3Pool.ts

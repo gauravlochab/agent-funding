@@ -31,9 +31,11 @@ type ProtocolPosition @entity(immutable: false) {
   # Current state (only updated for active positions)
   usdCurrent: BigDecimal!   # Total USD value
   token0: Bytes
+  token0Symbol: String      # Token0 symbol (e.g., "USDC")
   amount0: BigDecimal       # Current token0 amount
   amount0USD: BigDecimal!   # Current USD value of token0
   token1: Bytes
+  token1Symbol: String      # Token1 symbol (e.g., "DAI")
   amount1: BigDecimal       # Current token1 amount  
   amount1USD: BigDecimal!   # Current USD value of token1
   liquidity: BigInt
@@ -44,7 +46,8 @@ type ProtocolPosition @entity(immutable: false) {
   # Static position metadata (cached to avoid RPC calls)
   tickLower: Int!           # Lower tick boundary (never changes)
   tickUpper: Int!           # Upper tick boundary (never changes)
-  tickSpacing: Int!         # Tick spacing for the pool (never changes)
+  tickSpacing: Int          # Tick spacing for the pool (never changes) - used by Velodrome CL
+  fee: Int                  # Fee tier for the pool (never changes) - used by Uniswap V3
   
   # Entry tracking
   entryTxHash: Bytes!       # Transaction hash when position opened

@@ -251,20 +251,19 @@ function initializeTokens(): void {
     ]
   ))
 
-  // LUSD - Limited pools
+  // LUSD - Use Velodrome V2 instead of empty Uniswap pool
   TOKENS.set("0xc40f949f8a4e094d1b49a23ea9241d289b7b2819", new TokenConfig(
     Address.fromString("0xc40f949f8a4e094d1b49a23ea9241d289b7b2819"),
     "LUSD",
     18,
     [
-      // Priority 1: Uniswap V3 LUSD/USDC
+      // Priority 1: Velodrome V2 USDC/LUSD (active pool)
       new PriceSourceConfig(
-        Address.fromString("0xfd07b75bf9d23c23df1a979101e63e9a212728eb"),
-        "uniswap_v3",
+        Address.fromString("0x4f3da11c5cadf644ae023dbad01008a934c993e2"),
+        "velodrome_v2",
         1,
-        75,
-        Address.fromString("0x0b2c639c533813f4aa9d7837caf62653d097ff85"), // USDC
-        30 // 0.3% fee
+        85,
+        Address.fromString("0x0b2c639c533813f4aa9d7837caf62653d097ff85") // USDC
       )
     ]
   ))

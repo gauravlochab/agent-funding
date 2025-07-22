@@ -87,52 +87,31 @@ export function handleVeloV2Sync(event: Sync): void {
 
 // Handle VelodromeV2 Pool Transfer events (LP token transfers)
 export function handleVeloV2Transfer(event: Transfer): void {
-  // LP token transfers can indicate position changes
-  // We care about transfers involving our Safe address
-  
   const from = event.params.from
   const to = event.params.to
   const value = event.params.value
   
-  log.warning("VELODROME V2 POOL: Transfer event triggered for pool {}!", [event.address.toHexString()])
-  log.warning("VELODROME V2 POOL: Transfer event - pool: {}, from: {}, to: {}, value: {}, txFrom: {}, txHash: {}, block: {}", [
+  log.warning("VELODROME V2 POOL: Transfer event - pool: {}, from: {}, to: {}, value: {}", [
     event.address.toHexString(),
     from.toHexString(),
     to.toHexString(),
-    value.toString(),
-    event.transaction.from.toHexString(),
-    event.transaction.hash.toHexString(),
-    event.block.number.toString()
+    value.toString()
   ])
   
   // Handle minting (from zero address)
   if (from.toHexString() == "0x0000000000000000000000000000000000000000") {
-    // This is a mint to the 'to' address
     log.warning("VELODROME V2 POOL: LP tokens minted to {}", [to.toHexString()])
-    
-    // Ensure pool template exists before processing position
-    if (isSafe(to)) {
-      ensureVeloV2PoolTemplate(event.address)
-    }
-    
     refreshVeloV2Position(to, event.address, event.block, event.transaction.hash)
     return
   }
   
   // Handle burning (to zero address)
   if (to.toHexString() == "0x0000000000000000000000000000000000000000") {
-    // This is a burn from the 'from' address
     refreshVeloV2Position(from, event.address, event.block, event.transaction.hash)
     return
   }
   
   // Handle regular transfers between addresses
-  // Ensure template exists if Safe is involved
-  if (isSafe(from) || isSafe(to)) {
-    ensureVeloV2PoolTemplate(event.address)
-  }
-  
-  // Update both sender and receiver positions
   refreshVeloV2Position(from, event.address, event.block, event.transaction.hash)
   refreshVeloV2Position(to, event.address, event.block, event.transaction.hash)
 }

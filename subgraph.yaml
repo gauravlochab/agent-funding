@@ -1,4 +1,4 @@
-specVersion: 0.0.5
+specVersion: 0.0.8
 schema:
   file: ./schema.graphql
 dataSources:
@@ -8,7 +8,7 @@ dataSources:
     source:
       address: "0xc8e264f402ae94f69bdef8b1f035f7200cd2b0c7"
       abi: Safe
-      startBlock: 137808400
+      startBlock: 137808450
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -32,7 +32,7 @@ dataSources:
     source:
       address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
       abi: ERC20
-      startBlock: 137808400
+      startBlock: 137808450
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -54,7 +54,7 @@ dataSources:
     source:
       address: "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"
       abi: ERC20
-      startBlock: 137808400
+      startBlock: 137808450
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -76,7 +76,7 @@ dataSources:
     source:
       address: "0x416b433906b1B72FA758e166e239c43d68dC6F29"
       abi: NonfungiblePositionManager
-      startBlock: 137808400
+      startBlock: 137808450
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -108,7 +108,7 @@ dataSources:
     source:
       address: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
       abi: NonfungiblePositionManager
-      startBlock: 137808400
+      startBlock: 137808450
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -138,39 +138,56 @@ dataSources:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleUniV3Transfer
       file: ./src/uniV3NFTManager.ts
-  # Bootstrap VelodromeV2 Pool - USDC/LUSD pool that Safe already uses
-  - kind: ethereum
-    name: VeloV2Pool_USDC_LUSD
+  # VelodromeV2 Sugar Bootstrap
+  - kind: ethereum/contract
+    name: VeloV2Sugar
     network: optimism
     source:
-      address: "0x4f3da11c5cadf644ae023dbad01008a934c993e2"
-      abi: VelodromeV2Pool
-      startBlock: 137808400
+      address: '0xA64db2D254f07977609def75c3A7db3eDc72EE1D'
+      abi: Sugar
+      startBlock: 137808450
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
+      file: ./src/veloV2Bootstrap.ts
       entities:
         - ProtocolPosition
       abis:
+        - name: Sugar
+          file: ./abis/Sugar.json
+        - name: PoolFactory
+          file: ./abis/PoolFactory.json
         - name: VelodromeV2Pool
           file: ./abis/VelodromeV2Pool.json
-        - name: AggregatorV3Interface
-          file: ./abis/AggregatorV3Interface.json
-        - name: VelodromeCLPool
-          file: ./abis/VelodromeCLPool.json
-        - name: UniswapV3Pool
-          file: ./abis/UniswapV3Pool.json
+      blockHandlers:
+        - handler: handleVeloV2Bootstrap
+          filter:
+            kind: once
+
+  # VelodromeV2 Factory for ongoing discovery
+  - kind: ethereum/contract
+    name: VeloV2Factory
+    network: optimism
+    source:
+      address: '0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a'
+      abi: PoolFactory
+      startBlock: 137808450
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/veloV2Bootstrap.ts
+      entities:
+        - ProtocolPosition
+      abis:
+        - name: PoolFactory
+          file: ./abis/PoolFactory.json
+        - name: VelodromeV2Pool
+          file: ./abis/VelodromeV2Pool.json
       eventHandlers:
-        - event: Mint(indexed address,uint256,uint256)
-          handler: handleVeloV2Mint
-        - event: Burn(indexed address,indexed address,uint256,uint256)
-          handler: handleVeloV2Burn
-        - event: Sync(uint256,uint256)
-          handler: handleVeloV2Sync
-        - event: Transfer(indexed address,indexed address,uint256)
-          handler: handleVeloV2Transfer
-      file: ./src/veloV2Pool.ts
+        - event: PoolCreated(indexed address,indexed address,indexed bool,address,uint256)
+          handler: handleVeloV2PoolCreated
 templates:
   - kind: ethereum/contract
     name: VeloCLPool

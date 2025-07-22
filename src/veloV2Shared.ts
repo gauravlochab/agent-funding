@@ -220,7 +220,7 @@ export function refreshVeloV2PositionWithEventAmounts(
     pp.entryAmount1USD = eventUsd1
     pp.entryAmountUSD = eventUsd
     
-    log.info("VELODROME V2: Position {} INITIAL ENTRY SET - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+    log.warning("VELODROME V2: Position {} INITIAL ENTRY SET from Mint - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
       positionId.toHexString(),
       pp.entryAmount0.toString(),
       pp.entryAmount1.toString(),
@@ -234,7 +234,7 @@ export function refreshVeloV2PositionWithEventAmounts(
     pp.entryAmount1USD = pp.entryAmount1USD.plus(eventUsd1)
     pp.entryAmountUSD = pp.entryAmountUSD.plus(eventUsd)
     
-    log.info("VELODROME V2: Position {} ENTRY INCREASED - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+    log.warning("VELODROME V2: Position {} ENTRY INCREASED from Mint - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
       positionId.toHexString(),
       pp.entryAmount0.toString(),
       pp.entryAmount1.toString(),
@@ -294,9 +294,9 @@ export function refreshVeloV2Position(
     pp.amount1USD = BigDecimal.zero()
     pp.liquidity = BigInt.zero()
     
-    // Initialize entry tracking fields
-    pp.entryTxHash = txHash
-    pp.entryTimestamp = block.timestamp
+    // Initialize entry tracking fields - will be set when we calculate current amounts
+    pp.entryTxHash = Bytes.empty()
+    pp.entryTimestamp = BigInt.zero()
     pp.entryAmount0 = BigDecimal.zero()
     pp.entryAmount0USD = BigDecimal.zero()
     pp.entryAmount1 = BigDecimal.zero()
@@ -381,7 +381,25 @@ export function refreshVeloV2Position(
     
     pp.isActive = true
     
-    log.info("VELODROME V2: Position {} UPDATED - amount0: {}, amount1: {}, usdCurrent: {}", [
+    // If this is a new position (entry amounts not set), use current amounts as entry
+    if (pp.entryAmountUSD.equals(BigDecimal.zero()) && pp.entryTimestamp.equals(BigInt.zero())) {
+      pp.entryTxHash = txHash
+      pp.entryTimestamp = block.timestamp
+      pp.entryAmount0 = pp.amount0!
+      pp.entryAmount0USD = pp.amount0USD!
+      pp.entryAmount1 = pp.amount1!
+      pp.entryAmount1USD = pp.amount1USD!
+      pp.entryAmountUSD = pp.usdCurrent
+      
+      log.warning("VELODROME V2: Position {} INITIAL ENTRY SET from current state - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+        positionId.toHexString(),
+        pp.entryAmount0.toString(),
+        pp.entryAmount1.toString(),
+        pp.entryAmountUSD.toString()
+      ])
+    }
+    
+    log.warning("VELODROME V2: Position {} UPDATED - amount0: {}, amount1: {}, usdCurrent: {}", [
       positionId.toHexString(),
       pp.amount0!.toString(),
       pp.amount1!.toString(),

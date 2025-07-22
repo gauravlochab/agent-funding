@@ -76,7 +76,8 @@ export function getTokenPriceUSD(
   let criticalStablecoins = [
     "0x0b2c639c533813f4aa9d7837caf62653d097ff85", // USDC
     "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",  // USDT
-    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"   // DAI
+    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",  // DAI
+    "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819"   // LUSD
   ]
 
   let tokenHex = token.id.toHexString().toLowerCase()

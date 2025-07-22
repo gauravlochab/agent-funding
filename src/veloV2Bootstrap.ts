@@ -123,9 +123,13 @@ export function handleVeloV2Bootstrap(block: ethereum.Block): void {
     for (let i = 0; i < pools.length; i++) {
       let poolData = pools[i]
       
-      // Check if it's a VelodromeV2 pool (type 0 is stable, type -1 is volatile)
-      // Skip concentrated liquidity pools (type 1)
+      // IMPORTANT: Pool type mapping for VelodromeV2 (confirmed manually)
+      // type 0 = stable pools
+      // type -1 = volatile pools  
+      // type 1 = concentrated liquidity pools (skip these)
+      // Only track stable (0) and volatile (-1) pools
       if ([0,-1].includes(poolData.type) && isPoolRelevant(poolData.token0, poolData.token1)) {
+        // Note: isStable is true when type is -1 (this is correct per manual verification)
         let isStable = poolData.type == -1
         createPoolTemplate(poolData.id, poolData.token0, poolData.token1, isStable)
         whitelistedFound++

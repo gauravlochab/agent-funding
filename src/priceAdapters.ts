@@ -119,18 +119,48 @@ export function getUniswapV3Price(
   let token0Decimals: i32
   let token1Decimals: i32
 
+  log.info("📊 UNISWAP: Pool tokens - token0: {}, token1: {}", [
+    token0.toHexString(),
+    token1.toHexString()
+  ])
+  log.info("📊 UNISWAP: Looking for token: {}, pair token: {}", [
+    token.toHexString(),
+    pairToken.toHexString()
+  ])
+  log.info("📊 UNISWAP: sqrtPriceX96: {}", [sqrtPriceX96.toString()])
+
   if (token.equals(token0)) {
     token0Decimals = targetTokenConfig.decimals
     token1Decimals = pairTokenConfig.decimals
+    log.info("📊 UNISWAP: Token is token0, decimals: {} / {}", [
+      token0Decimals.toString(),
+      token1Decimals.toString()
+    ])
     // Token is token0, get price in terms of token1
     let price = sqrtPriceToToken0Price(sqrtPriceX96, token0Decimals, token1Decimals)
-    return price.times(getPairTokenPrice(pairToken))
+    let pairPrice = getPairTokenPrice(pairToken)
+    log.info("📊 UNISWAP: Raw price: {}, pair price: {}, final: {}", [
+      price.toString(),
+      pairPrice.toString(),
+      price.times(pairPrice).toString()
+    ])
+    return price.times(pairPrice)
   } else if (token.equals(token1)) {
     token0Decimals = pairTokenConfig.decimals
     token1Decimals = targetTokenConfig.decimals
+    log.info("📊 UNISWAP: Token is token1, decimals: {} / {}", [
+      token0Decimals.toString(),
+      token1Decimals.toString()
+    ])
     // Token is token1, get price in terms of token0
     let price = sqrtPriceToToken1Price(sqrtPriceX96, token0Decimals, token1Decimals)
-    return price.times(getPairTokenPrice(pairToken))
+    let pairPrice = getPairTokenPrice(pairToken)
+    log.info("📊 UNISWAP: Raw price: {}, pair price: {}, final: {}", [
+      price.toString(),
+      pairPrice.toString(),
+      price.times(pairPrice).toString()
+    ])
+    return price.times(pairPrice)
   }
   
   return BigDecimal.fromString("0")
@@ -160,7 +190,8 @@ function getPairTokenPrice(pairToken: Address): BigDecimal {
   let stablecoins = [
     "0x0b2c639c533813f4aa9d7837caf62653d097ff85", // USDC
     "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",  // USDT
-    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"   // DAI
+    "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",  // DAI
+    "0xc40f949f8a4e094d1b49a23ea9241d289b7b2819"   // LUSD
   ]
   
   for (let i = 0; i < stablecoins.length; i++) {
@@ -215,8 +246,18 @@ function sqrtPriceToToken0Price(
   
   let price = sqrtPrice.times(sqrtPrice) // Square it safely
   
+  log.info("📊 MATH: sqrtPrice: {}, price before adjustment: {}", [
+    sqrtPrice.toString(),
+    price.toString()
+  ])
+  
   // Decimal adjustment with bounds checking
   let decimalDiff = token1Decimals - token0Decimals
+  log.info("📊 MATH: Decimal difference: {} (token1: {} - token0: {})", [
+    decimalDiff.toString(),
+    token1Decimals.toString(),
+    token0Decimals.toString()
+  ])
   if (decimalDiff > 0 && decimalDiff <= 18) {
     let multiplier = BigDecimal.fromString("1")
     for (let i = 0; i < decimalDiff; i++) {
@@ -232,6 +273,8 @@ function sqrtPriceToToken0Price(
   } else if (decimalDiff != 0) {
     log.warning("⚠️ MATH: Extreme decimal difference: {}", [decimalDiff.toString(10)])
   }
+  
+  log.info("📊 MATH: Final price after adjustment: {}", [price.toString()])
   
   // Final safety check
   if (price.le(BigDecimal.fromString("0")) || 

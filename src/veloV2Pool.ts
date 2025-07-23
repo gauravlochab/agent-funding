@@ -35,39 +35,55 @@ export function handleVeloV2Mint(event: Mint): void {
 // Handle VelodromeV2 Pool Burn events (liquidity removals)
 export function handleVeloV2Burn(event: Burn): void {
   log.warning("===== VELODROME V2 BURN EVENT START =====", [])
-  log.warning("VELODROME V2 BURN: Block: {}, TxHash: {}", [
+  log.warning("VELODROME V2 BURN: Block: {}, TxHash: {}, Timestamp: {}", [
     event.block.number.toString(),
-    event.transaction.hash.toHexString()
+    event.transaction.hash.toHexString(),
+    event.block.timestamp.toString()
   ])
   log.warning("VELODROME V2 BURN: Pool: {}, Sender: {}, To: {}", [
     event.address.toHexString(),
     event.params.sender.toHexString(),
     event.params.to.toHexString()
   ])
-  log.warning("VELODROME V2 BURN: Amounts - amount0: {}, amount1: {}", [
+  log.warning("VELODROME V2 BURN: Raw amounts - amount0: {}, amount1: {}", [
     event.params.amount0.toString(),
     event.params.amount1.toString()
   ])
-  log.warning("VELODROME V2 BURN: Transaction from: {}", [
-    event.transaction.from.toHexString()
+  log.warning("VELODROME V2 BURN: Transaction details - from: {}, to: {}", [
+    event.transaction.from.toHexString(),
+    event.transaction.to ? event.transaction.to!.toHexString() : "null"
   ])
   
-  // The 'to' address is where the tokens are being sent (usually the user)
-  // But we should also check the transaction from address
-  const userAddress = event.transaction.from
+  // The 'to' address is where the tokens are being sent (the actual user/recipient)
+  // In VelodromeV2, the burn event's 'to' parameter indicates who receives the tokens
+  const userAddress = event.params.to
   
-  log.warning("VELODROME V2 BURN: Refreshing position for user: {}", [
-    userAddress.toHexString()
+  log.warning("VELODROME V2 BURN: Identified user address from burn event 'to' param: {} (Safe: {})", [
+    userAddress.toHexString(),
+    isSafe(userAddress) ? "YES" : "NO"
   ])
   
-  refreshVeloV2PositionWithBurnAmounts(
-    userAddress,
-    event.address, // pool address
-    event.block,
-    event.params.amount0,
-    event.params.amount1,
-    event.transaction.hash
-  )
+  log.warning("VELODROME V2 BURN: For reference - tx.from: {}, burn.to: {}", [
+    event.transaction.from.toHexString(),
+    event.params.to.toHexString()
+  ])
+  
+  if (isSafe(userAddress)) {
+    log.warning("VELODROME V2 BURN: ✅ This burn is for the Safe - processing burn", [])
+    
+    refreshVeloV2PositionWithBurnAmounts(
+      userAddress,
+      event.address, // pool address
+      event.block,
+      event.params.amount0,
+      event.params.amount1,
+      event.transaction.hash
+    )
+    
+    log.warning("VELODROME V2 BURN: ✅ Burn processing completed successfully", [])
+  } else {
+    log.warning("VELODROME V2 BURN: ❌ Burn is not for the Safe - skipping burn processing", [])
+  }
   
   log.warning("===== VELODROME V2 BURN EVENT END =====", [])
 }

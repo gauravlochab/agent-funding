@@ -421,35 +421,108 @@ export function refreshVeloV2PositionWithBurnAmounts(
 ): void {
   const positionId = getVeloV2PositionId(userAddress, poolAddress)
   
+  log.warning("===== VELODROME V2 BURN PROCESSING START =====", [])
+  log.warning("VELODROME V2 BURN: Processing burn for user: {}, pool: {}, positionId: {}", [
+    userAddress.toHexString(),
+    poolAddress.toHexString(),
+    positionId.toHexString()
+  ])
+  log.warning("VELODROME V2 BURN: Raw amounts - amount0: {}, amount1: {}", [
+    eventAmount0.toString(),
+    eventAmount1.toString()
+  ])
+  log.warning("VELODROME V2 BURN: Block: {}, TxHash: {}, Timestamp: {}", [
+    block.number.toString(),
+    txHash.toHexString(),
+    block.timestamp.toString()
+  ])
+  
   // Only track positions owned by our Safe
   if (!isSafe(userAddress)) {
-    log.info("VELODROME V2: Skipping burn for non-safe address {}", [userAddress.toHexString()])
+    log.warning("VELODROME V2 BURN: Skipping burn for non-safe address {} (Safe is {})", [
+      userAddress.toHexString(),
+      SAFE_ADDRESS.toHexString()
+    ])
     return
   }
   
+  log.warning("VELODROME V2 BURN: User {} IS the Safe, proceeding with burn processing", [userAddress.toHexString()])
+  
   let pp = ProtocolPosition.load(positionId)
   if (!pp) {
-    log.warning("VELODROME V2: Position {} not found for burn", [positionId.toHexString()])
+    log.error("VELODROME V2 BURN: Position {} not found for burn - this should not happen in production!", [positionId.toHexString()])
+    log.error("VELODROME V2 BURN: User: {}, Pool: {}, TxHash: {}", [
+      userAddress.toHexString(),
+      poolAddress.toHexString(),
+      txHash.toHexString()
+    ])
     return
   }
+  
+  log.warning("VELODROME V2 BURN: Position found - current state before burn:", [])
+  log.warning("VELODROME V2 BURN: - isActive: {}, liquidity: {}", [
+    pp.isActive.toString(),
+    pp.liquidity ? pp.liquidity!.toString() : "0"
+  ])
+  log.warning("VELODROME V2 BURN: - current amount0: {}, amount1: {}, usdCurrent: {}", [
+    pp.amount0 ? pp.amount0!.toString() : "0",
+    pp.amount1 ? pp.amount1!.toString() : "0",
+    pp.usdCurrent.toString()
+  ])
+  log.warning("VELODROME V2 BURN: - entry amount0: {}, amount1: {}, entryUSD: {}", [
+    pp.entryAmount0.toString(),
+    pp.entryAmount1.toString(),
+    pp.entryAmountUSD.toString()
+  ])
   
   // Convert event amounts to human readable format
   const token0Decimals = getTokenDecimals(Address.fromBytes(pp.token0!))
   const token1Decimals = getTokenDecimals(Address.fromBytes(pp.token1!))
   
+  const token0Symbol = pp.token0Symbol ? pp.token0Symbol! : "TOKEN0"
+  const token1Symbol = pp.token1Symbol ? pp.token1Symbol! : "TOKEN1"
+  
+  log.warning("VELODROME V2 BURN: Token decimals - token0 ({}): {}, token1 ({}): {}", [
+    token0Symbol,
+    token0Decimals.toString(),
+    token1Symbol,
+    token1Decimals.toString()
+  ])
+  
   const eventAmount0Human = toHumanAmount(eventAmount0, token0Decimals)
   const eventAmount1Human = toHumanAmount(eventAmount1, token1Decimals)
+  
+  log.warning("VELODROME V2 BURN: Human readable amounts - {} {}, {} {}", [
+    eventAmount0Human.toString(),
+    token0Symbol,
+    eventAmount1Human.toString(),
+    token1Symbol
+  ])
   
   // Get USD values for exit tracking
   const eventUsd0 = getTokenPriceUSD(Address.fromBytes(pp.token0!), block.timestamp, false).times(eventAmount0Human)
   const eventUsd1 = getTokenPriceUSD(Address.fromBytes(pp.token1!), block.timestamp, false).times(eventAmount1Human)
   const eventUsd = eventUsd0.plus(eventUsd1)
   
-  log.info("VELODROME V2: Processing burn for position {} - amount0: {}, amount1: {}, usd: {}", [
-    positionId.toHexString(),
-    eventAmount0Human.toString(),
-    eventAmount1Human.toString(),
+  log.warning("VELODROME V2 BURN: USD values - {} USD ({}), {} USD ({}), total: {} USD", [
+    eventUsd0.toString(),
+    token0Symbol,
+    eventUsd1.toString(),
+    token1Symbol,
     eventUsd.toString()
+  ])
+  
+  // Store previous exit amounts for comparison
+  const previousExitAmount0 = pp.exitAmount0 ? pp.exitAmount0! : BigDecimal.zero()
+  const previousExitAmount1 = pp.exitAmount1 ? pp.exitAmount1! : BigDecimal.zero()
+  const previousExitUSD = pp.exitAmountUSD ? pp.exitAmountUSD! : BigDecimal.zero()
+  
+  log.warning("VELODROME V2 BURN: Previous exit amounts - {} {}, {} {}, {} USD", [
+    previousExitAmount0.toString(),
+    token0Symbol,
+    previousExitAmount1.toString(),
+    token1Symbol,
+    previousExitUSD.toString()
   ])
   
   // Update exit tracking (if this is the final burn, these will be the exit amounts)
@@ -461,7 +534,39 @@ export function refreshVeloV2PositionWithBurnAmounts(
   pp.exitAmount1USD = eventUsd1
   pp.exitAmountUSD = eventUsd
   
+  log.warning("VELODROME V2 BURN: Updated exit tracking - txHash: {}, timestamp: {}", [
+    txHash.toHexString(),
+    block.timestamp.toString()
+  ])
+  log.warning("VELODROME V2 BURN: New exit amounts - {} {}, {} {}, {} USD", [
+    pp.exitAmount0!.toString(),
+    token0Symbol,
+    pp.exitAmount1!.toString(),
+    token1Symbol,
+    pp.exitAmountUSD!.toString()
+  ])
+  
+  // Calculate PnL for logging
+  const pnlAmount0 = pp.exitAmount0!.minus(pp.entryAmount0)
+  const pnlAmount1 = pp.exitAmount1!.minus(pp.entryAmount1)
+  const pnlUSD = pp.exitAmountUSD!.minus(pp.entryAmountUSD)
+  
+  log.warning("VELODROME V2 BURN: PnL calculation - {} {} ({}), {} {} ({}), {} USD", [
+    pnlAmount0.gt(BigDecimal.zero()) ? "+" : "",
+    pnlAmount0.toString(),
+    token0Symbol,
+    pnlAmount1.gt(BigDecimal.zero()) ? "+" : "",
+    pnlAmount1.toString(),
+    token1Symbol,
+    pnlUSD.gt(BigDecimal.zero()) ? "+" : "",
+    pnlUSD.toString()
+  ])
+  
   // Save and refresh current state
   pp.save()
+  log.warning("VELODROME V2 BURN: Position saved, now refreshing current state...", [])
+  
   refreshVeloV2Position(userAddress, poolAddress, block, txHash)
+  
+  log.warning("===== VELODROME V2 BURN PROCESSING END =====", [])
 }

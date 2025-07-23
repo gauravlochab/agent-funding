@@ -1,5 +1,5 @@
 import { SafeReceived, ExecutionSuccess } from "../generated/Safe/Safe"
-import { Transfer } from "../generated/ERC20/ERC20"
+import { Transfer } from "../generated/USDC_Native/ERC20"
 import { Address, BigDecimal, log } from "@graphprotocol/graph-ts"
 import {
   isFundingSource, FUNDING_TOKENS,

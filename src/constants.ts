@@ -8,5 +8,4 @@ export const VELO_FACTORY = Address.fromString("0x548118C7E0B865C2CfA94D15EC86B6
 export const UNI_V3_MANAGER = Address.fromString("0xC36442b4a4522E871399CD717aBDD847Ab11FE88")
 export const UNI_V3_FACTORY = Address.fromString("0x1F98431c8aD98523631AE4a59f267346ea31F984")
 
-// Safe address (copy from existing config)
-export const SAFE_ADDRESS = Address.fromString("0x9f3abfc3301093f39c2a137f87c525b4a0832ba9")
+// Note: SAFE_ADDRESS has been removed as we now track multiple services dynamically via ServiceRegistryL2

@@ -11,7 +11,7 @@ import { refreshPortfolio } from "./common"
 import { addAgentNFTToPool, removeAgentNFTFromPool, getCachedPoolAddress, cachePoolAddress } from "./poolIndexCache"
 import { getTokenPriceUSD } from "./priceDiscovery"
 import { UNI_V3_MANAGER, UNI_V3_FACTORY } from "./constants"
-import { isValidAgent } from "./config"
+import { isServiceAgent } from "./config"
 
 // Helper function to get token decimals
 function getTokenDecimals(tokenAddress: Address): i32 {
@@ -145,9 +145,9 @@ export function refreshUniV3PositionWithEventAmounts(
   
   const nftOwner = ownerResult.value
 
-  // AGENT FILTERING: Only process positions owned by our Safe
-  if (!isValidAgent(nftOwner)) {
-    log.info("UNISWAP V3: Skipping position {} - not owned by agent (owner: {})", [
+  // AGENT FILTERING: Only process positions owned by a service
+  if (!isServiceAgent(nftOwner)) {
+    log.info("UNISWAP V3: Skipping position {} - not owned by a service (owner: {})", [
       tokenId.toString(),
       nftOwner.toHexString()
     ])
@@ -281,9 +281,9 @@ export function refreshUniV3Position(tokenId: BigInt, block: ethereum.Block, txH
   
   const nftOwner = ownerResult.value
 
-  // AGENT FILTERING: Only process positions owned by our Safe
-  if (!isValidAgent(nftOwner)) {
-    log.info("UNISWAP V3: Skipping position {} - not owned by agent (owner: {})", [
+  // AGENT FILTERING: Only process positions owned by a service
+  if (!isServiceAgent(nftOwner)) {
+    log.info("UNISWAP V3: Skipping position {} - not owned by a service (owner: {})", [
       tokenId.toString(),
       nftOwner.toHexString()
     ])

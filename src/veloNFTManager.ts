@@ -5,8 +5,7 @@ import {
   Transfer,
   NonfungiblePositionManager
 } from "../generated/VeloNFTManager/NonfungiblePositionManager"
-import { isSafe } from "./common"
-import { SAFE_ADDRESS, VELO_NFT_MANAGER } from "./config"
+import { VELO_NFT_MANAGER, getServiceByAgent } from "./config"
 import { ensurePoolTemplate, refreshVeloCLPosition, refreshVeloCLPositionWithEventAmounts, handleNFTTransferForCache } from "./veloCLShared"
 import { isSafeOwnedNFT } from "./poolIndexCache"
 import { log, Address, Bytes } from "@graphprotocol/graph-ts"
@@ -15,18 +14,18 @@ import { ProtocolPosition } from "../generated/schema"
 const MANAGER = VELO_NFT_MANAGER
 
 export function handleNFTTransfer(ev: Transfer): void {
-  const incoming = isSafe(ev.params.to)
-  const outgoing = isSafe(ev.params.from)
+  const toService = getServiceByAgent(ev.params.to)
+  const fromService = getServiceByAgent(ev.params.from)
 
-  if (!incoming && !outgoing) {
+  if (!toService && !fromService) {
     return
   }
 
-  if (incoming) {
+  if (toService) {
     ensurePoolTemplate(ev.params.tokenId)
   }
   
-  if (outgoing) {
+  if (fromService) {
     // Mark position as closed when NFT is transferred out
     const positionId = ev.params.from.toHex() + "-" + ev.params.tokenId.toString()
     const id = Bytes.fromUTF8(positionId)
@@ -80,7 +79,7 @@ export function handleIncreaseLiquidity(ev: IncreaseLiquidity): void {
     const mgr = NonfungiblePositionManager.bind(MANAGER)
     const ownerResult = mgr.try_ownerOf(ev.params.tokenId)
     
-    if (!ownerResult.reverted && isSafe(ownerResult.value)) {
+    if (!ownerResult.reverted && getServiceByAgent(ownerResult.value) != null) {
       shouldProcess = true
       log.info("VELODROME: Actual ownership confirmed for tokenId: {}, owner: {}", [
         ev.params.tokenId.toString(),
@@ -130,21 +129,25 @@ export function handleDecreaseLiquidity(ev: DecreaseLiquidity): void {
     
   } else {
     
-    // 2. Check for existing active position (key fix for your issue!)
-    const positionId = SAFE_ADDRESS.toHex() + "-" + ev.params.tokenId.toString()
-    const id = Bytes.fromUTF8(positionId)
-    const position = ProtocolPosition.load(id)
+    // 2. Final fallback: check actual ownership on-chain
+    const mgr = NonfungiblePositionManager.bind(MANAGER)
+    const ownerResult = mgr.try_ownerOf(ev.params.tokenId)
     
-    if (position && position.isActive) {
-      shouldProcess = true
-    } else {
+    if (!ownerResult.reverted) {
+      const owner = ownerResult.value
+      const ownerService = getServiceByAgent(owner)
       
-      // 3. Final fallback: check actual ownership on-chain
-      const mgr = NonfungiblePositionManager.bind(MANAGER)
-      const ownerResult = mgr.try_ownerOf(ev.params.tokenId)
-      
-      if (!ownerResult.reverted && isSafe(ownerResult.value)) {
+      if (ownerService != null) {
         shouldProcess = true
+        
+        // Check for existing active position
+        const positionId = owner.toHex() + "-" + ev.params.tokenId.toString()
+        const id = Bytes.fromUTF8(positionId)
+        const position = ProtocolPosition.load(id)
+        
+        if (position && position.isActive) {
+          shouldProcess = true
+        }
         
         // Ensure pool template exists and populate cache for future
         ensurePoolTemplate(ev.params.tokenId)

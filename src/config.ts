@@ -1,19 +1,11 @@
-import { Address } from "@graphprotocol/graph-ts"
+import { Address, Bytes } from "@graphprotocol/graph-ts"
+import { Service } from "../generated/schema"
 
 // =============================================================================
-// CONFIGURATION - Update these addresses for different deployments
+// DYNAMIC SERVICE CONFIGURATION - No hardcoded addresses
 // =============================================================================
 
-// Safe address to monitor
-export const SAFE_ADDRESS = Address.fromString("0xc8e264f402ae94f69bdef8b1f035f7200cd2b0c7")
-export const SAFE_ADDRESS_HEX = "0xc8e264f402ae94f69bdef8b1f035f7200cd2b0c7" // Lowercase for quick comparison
-
-// Treasury/Whitelisted addresses
-export const TREASURY_ADDRESSES: string[] = [
-  "0x9c06cbfe165c1f385b3f2d62084442d8e5c109f2"  // Treasury address (EOA for the safe)
-]
-
-// Token addresses (network-specific)
+// Token addresses (network-specific) - Keep these as they're protocol tokens, not service-specific
 export const USDC_NATIVE = Address.fromString("0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85") // Native USDC on Optimism
 export const USDC_BRIDGED = Address.fromString("0x7F5c764cBc14f9669B88837ca1490cCa17c31607") // USDC.e (Bridged) on Optimism
 
@@ -24,8 +16,30 @@ export const USDC_USD_FEED = Address.fromString("0x16a9FA2FDa030272Ce99B29CF780d
 // Other contract addresses
 export const VELO_NFT_MANAGER = Address.fromString("0x416b433906b1B72FA758e166e239c43d68dC6F29")
 
-// Agent validation function - only allow positions owned by the Safe
+// Service lookup functions
+export function getServiceByAgent(address: Address): Service | null {
+  return Service.load(address)
+}
+
+export function isServiceAgent(address: Address): boolean {
+  return getServiceByAgent(address) !== null
+}
+
+// Legacy function name for compatibility
 export function isValidAgent(address: Address): boolean {
-  const addressHex = address.toHexString().toLowerCase()
-  return addressHex == SAFE_ADDRESS_HEX.toLowerCase()
+  return isServiceAgent(address)
+}
+
+// Get service by operator safe
+export function getServiceByOperator(operator: Address): Service | null {
+  // Note: This is not efficient in subgraphs as we can't query by field
+  // In practice, we'll check if a specific service's operator matches
+  // This is mainly used in funding logic where we already have the service
+  return null
+}
+
+// Check if address is a service operator
+export function isServiceOperator(address: Address): boolean {
+  // This will be checked in context where we have a specific service
+  return false
 }

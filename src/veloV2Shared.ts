@@ -11,11 +11,10 @@ import { ProtocolPosition } from "../generated/schema"
 import { VelodromeV2Pool } from "../generated/templates/VeloV2Pool/VelodromeV2Pool"
 import { VeloV2Pool as VeloV2PoolTemplate } from "../generated/templates"
 import { getTokenPriceUSD } from "./priceDiscovery"
-import { isSafe } from "./common"
+import { getServiceByAgent } from "./config"
 
 // VelodromeV2 Router address on Optimism
 const VELODROME_V2_ROUTER = Address.fromString("0xa062ae8a9c5e11aaa026fc2670b0d65ccc8b2858")
-const SAFE_ADDRESS = Address.fromString("0xc8e264f402ae94f69bdef8b1f035f7200cd2b0c7")
 
 // Cache for VelodromeV2 pools to avoid repeated RPC calls
 let poolCache = new Map<string, bool>()
@@ -76,15 +75,15 @@ function toHumanAmount(amount: BigInt, decimals: i32): BigDecimal {
 export function ensureVeloV2PoolTemplate(poolAddress: Address): void {
   const poolKey = poolAddress.toHexString()
   
-  log.warning("VELODROME V2 TEMPLATE: ensureVeloV2PoolTemplate called for pool {}", [poolKey])
+  log.debug("VELODROME V2 TEMPLATE: ensureVeloV2PoolTemplate called for pool {}", [poolKey])
   
   if (!poolCache.has(poolKey)) {
-    log.warning("VELODROME V2 TEMPLATE: Creating NEW pool template for {} - this will start tracking all events for this pool", [poolKey])
+    log.info("VELODROME V2 TEMPLATE: Creating NEW pool template for {}", [poolKey])
     VeloV2PoolTemplate.create(poolAddress)
     poolCache.set(poolKey, true)
-    log.warning("VELODROME V2 TEMPLATE: Pool template CREATED successfully for {}", [poolKey])
+    log.debug("VELODROME V2 TEMPLATE: Pool template CREATED successfully for {}", [poolKey])
   } else {
-    log.warning("VELODROME V2 TEMPLATE: Pool template already exists for {} - skipping creation", [poolKey])
+    log.debug("VELODROME V2 TEMPLATE: Pool template already exists for {} - skipping creation", [poolKey])
   }
 }
 
@@ -106,16 +105,16 @@ export function refreshVeloV2PositionWithEventAmounts(
 ): void {
   const positionId = getVeloV2PositionId(userAddress, poolAddress)
   
-  // Only track positions owned by our Safe
-  log.warning("VELODROME V2 SHARED: Checking if address {} is Safe", [userAddress.toHexString()])
-  if (!isSafe(userAddress)) {
-    log.warning("VELODROME V2 SHARED: Skipping position for non-safe address {} (Safe is {})", [
-      userAddress.toHexString(),
-      SAFE_ADDRESS.toHexString()
+  // Only track positions owned by a service
+  log.debug("VELODROME V2 SHARED: Checking if address {} is a service", [userAddress.toHexString()])
+  const service = getServiceByAgent(userAddress)
+  if (service == null) {
+    log.debug("VELODROME V2 SHARED: Skipping position for non-service address {}", [
+      userAddress.toHexString()
     ])
     return
   }
-  log.warning("VELODROME V2 SHARED: Address {} IS the Safe, proceeding with position creation", [userAddress.toHexString()])
+  log.debug("VELODROME V2 SHARED: Address {} IS a service, proceeding with position creation", [userAddress.toHexString()])
   
   let pp = ProtocolPosition.load(positionId)
   if (!pp) {
@@ -220,7 +219,7 @@ export function refreshVeloV2PositionWithEventAmounts(
     pp.entryAmount1USD = eventUsd1
     pp.entryAmountUSD = eventUsd
     
-    log.warning("VELODROME V2: Position {} INITIAL ENTRY SET from Mint - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+    log.info("VELODROME V2: Position {} INITIAL ENTRY SET from Mint - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
       positionId.toHexString(),
       pp.entryAmount0.toString(),
       pp.entryAmount1.toString(),
@@ -234,7 +233,7 @@ export function refreshVeloV2PositionWithEventAmounts(
     pp.entryAmount1USD = pp.entryAmount1USD.plus(eventUsd1)
     pp.entryAmountUSD = pp.entryAmountUSD.plus(eventUsd)
     
-    log.warning("VELODROME V2: Position {} ENTRY INCREASED from Mint - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+    log.info("VELODROME V2: Position {} ENTRY INCREASED from Mint - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
       positionId.toHexString(),
       pp.entryAmount0.toString(),
       pp.entryAmount1.toString(),
@@ -258,22 +257,22 @@ export function refreshVeloV2Position(
 ): void {
   const positionId = getVeloV2PositionId(userAddress, poolAddress)
   
-  // Only track positions owned by our Safe
-  log.warning("VELODROME V2 REFRESH: Checking if address {} is Safe (Safe address: {})", [
-    userAddress.toHexString(),
-    SAFE_ADDRESS.toHexString()
+  // Only track positions owned by a service
+  log.debug("VELODROME V2 REFRESH: Checking if address {} is a service", [
+    userAddress.toHexString()
   ])
   
-  if (!isSafe(userAddress)) {
-    log.warning("VELODROME V2 REFRESH: Skipping refresh for non-safe address {}", [userAddress.toHexString()])
+  const service = getServiceByAgent(userAddress)
+  if (service == null) {
+    log.debug("VELODROME V2 REFRESH: Skipping refresh for non-service address {}", [userAddress.toHexString()])
     return
   }
   
-  log.warning("VELODROME V2 REFRESH: Address {} IS the Safe, proceeding with refresh", [userAddress.toHexString()])
+  log.debug("VELODROME V2 REFRESH: Address {} IS a service, proceeding with refresh", [userAddress.toHexString()])
   
   let pp = ProtocolPosition.load(positionId)
   if (!pp) {
-    log.warning("VELODROME V2 REFRESH: Position {} not found, creating new position for pool {}", [
+    log.debug("VELODROME V2 REFRESH: Position {} not found, creating new position for pool {}", [
       positionId.toHexString(),
       poolAddress.toHexString()
     ])
@@ -391,7 +390,7 @@ export function refreshVeloV2Position(
       pp.entryAmount1USD = pp.amount1USD!
       pp.entryAmountUSD = pp.usdCurrent
       
-      log.warning("VELODROME V2: Position {} INITIAL ENTRY SET from current state - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
+      log.info("VELODROME V2: Position {} INITIAL ENTRY SET from current state - entryAmount0: {}, entryAmount1: {}, entryAmountUSD: {}", [
         positionId.toHexString(),
         pp.entryAmount0.toString(),
         pp.entryAmount1.toString(),
@@ -399,7 +398,7 @@ export function refreshVeloV2Position(
       ])
     }
     
-    log.warning("VELODROME V2: Position {} UPDATED - amount0: {}, amount1: {}, usdCurrent: {}", [
+    log.debug("VELODROME V2: Position {} UPDATED - amount0: {}, amount1: {}, usdCurrent: {}", [
       positionId.toHexString(),
       pp.amount0!.toString(),
       pp.amount1!.toString(),
@@ -437,16 +436,16 @@ export function refreshVeloV2PositionWithBurnAmounts(
     block.timestamp.toString()
   ])
   
-  // Only track positions owned by our Safe
-  if (!isSafe(userAddress)) {
-    log.warning("VELODROME V2 BURN: Skipping burn for non-safe address {} (Safe is {})", [
-      userAddress.toHexString(),
-      SAFE_ADDRESS.toHexString()
+  // Only track positions owned by a service
+  const service = getServiceByAgent(userAddress)
+  if (service == null) {
+    log.warning("VELODROME V2 BURN: Skipping burn for non-service address {}", [
+      userAddress.toHexString()
     ])
     return
   }
   
-  log.warning("VELODROME V2 BURN: User {} IS the Safe, proceeding with burn processing", [userAddress.toHexString()])
+  log.warning("VELODROME V2 BURN: User {} IS a service, proceeding with burn processing", [userAddress.toHexString()])
   
   let pp = ProtocolPosition.load(positionId)
   if (!pp) {

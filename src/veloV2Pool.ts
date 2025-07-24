@@ -13,7 +13,7 @@ import {
 } from "./veloV2Shared"
 
 import { log } from "@graphprotocol/graph-ts"
-import { isSafe } from "./common"
+import { getServiceByAgent } from "./config"
 
 // Handle VelodromeV2 Pool Mint events (liquidity additions)
 export function handleVeloV2Mint(event: Mint): void {
@@ -58,9 +58,10 @@ export function handleVeloV2Burn(event: Burn): void {
   // In VelodromeV2, the burn event's 'to' parameter indicates who receives the tokens
   const userAddress = event.params.to
   
-  log.warning("VELODROME V2 BURN: Identified user address from burn event 'to' param: {} (Safe: {})", [
+  const userService = getServiceByAgent(userAddress)
+  log.warning("VELODROME V2 BURN: Identified user address from burn event 'to' param: {} (Service: {})", [
     userAddress.toHexString(),
-    isSafe(userAddress) ? "YES" : "NO"
+    userService != null ? "YES" : "NO"
   ])
   
   log.warning("VELODROME V2 BURN: For reference - tx.from: {}, burn.to: {}", [
@@ -68,8 +69,8 @@ export function handleVeloV2Burn(event: Burn): void {
     event.params.to.toHexString()
   ])
   
-  if (isSafe(userAddress)) {
-    log.warning("VELODROME V2 BURN: ✅ This burn is for the Safe - processing burn", [])
+  if (userService != null) {
+    log.warning("VELODROME V2 BURN: ✅ This burn is for a service - processing burn", [])
     
     refreshVeloV2PositionWithBurnAmounts(
       userAddress,
@@ -82,7 +83,7 @@ export function handleVeloV2Burn(event: Burn): void {
     
     log.warning("VELODROME V2 BURN: ✅ Burn processing completed successfully", [])
   } else {
-    log.warning("VELODROME V2 BURN: ❌ Burn is not for the Safe - skipping burn processing", [])
+    log.warning("VELODROME V2 BURN: ❌ Burn is not for a service - skipping burn processing", [])
   }
   
   log.warning("===== VELODROME V2 BURN EVENT END =====", [])

@@ -1,80 +1,64 @@
-import { SafeReceived, ExecutionSuccess } from "../generated/Safe/Safe"
 import { Transfer } from "../generated/USDC_Native/ERC20"
 import { Address, BigDecimal, log } from "@graphprotocol/graph-ts"
 import {
   isFundingSource, FUNDING_TOKENS,
-  getEthUsd, getUsdcUsd, isSafe
+  getEthUsd, getUsdcUsd
 } from "./common"
-import { SAFE_ADDRESS_HEX } from "./config"
+import { getServiceByAgent } from "./config"
 import { updateFunding } from "./helpers"
 
-// ETH in
-export function handleSafeReceived(ev: SafeReceived): void {
-  let txHash = ev.transaction.hash.toHexString()
-  if (!isFundingSource(ev.params.sender, ev.block, txHash)) return
-  let usd = ev.params.value.toBigDecimal()
-    .times(getEthUsd(ev.block))
-    .div(BigDecimal.fromString("1e18"))
-  updateFunding(ev.address, usd, true, ev.block.timestamp)
-}
-
-// ETH out
-export function handleExecutionSuccess(ev: ExecutionSuccess): void {
-  let txHash = ev.transaction.hash.toHexString()
-  if (ev.params.payment.isZero()) return
-  let to = ev.transaction.to as Address
-  if (!isFundingSource(to, ev.block, txHash)) return
-  let usd = ev.params.payment.toBigDecimal()
-    .times(getEthUsd(ev.block))
-    .div(BigDecimal.fromString("1e18"))
-  updateFunding(to, usd, false, ev.block.timestamp)
-}
-
-// USDC Transfer - OPTIMIZED VERSION
+// USDC Transfer - Dynamic multi-service version
 export function handleUSDC(ev: Transfer): void {
-  // Quick Safe address check first
-  let safeAddr = SAFE_ADDRESS_HEX
-  let fromHex = ev.params.from.toHexString().toLowerCase()
-  let toHex = ev.params.to.toHexString().toLowerCase()
-  
-  // Early exit if neither address is our Safe
-  if (fromHex != safeAddr && toHex != safeAddr) {
-    return
-  }
-  
   let from = ev.params.from
   let to = ev.params.to
   let value = ev.params.value
   let txHash = ev.transaction.hash.toHexString()
   
-  // Determine which address is the Safe
-  let fromIsSafe = (fromHex == safeAddr)
-  let toIsSafe = (toHex == safeAddr)
+  // Debug log to verify handler is being called
+  log.debug("FUNDING: USDC Transfer event - from: {}, to: {}, value: {}, block: {}", [
+    from.toHexString(),
+    to.toHexString(),
+    value.toString(),
+    ev.block.number.toString()
+  ])
   
-  // Check funding source status only when needed
-  let fromIsFundingSource = false
-  let toIsFundingSource = false
+  // Check if service safe is involved
+  let fromService = getServiceByAgent(from)
+  let toService = getServiceByAgent(to)
   
-  if (!fromIsSafe) {
-    fromIsFundingSource = isFundingSource(from, ev.block, txHash)
+  // Case 1: Transfer TO service safe
+  if (toService != null) {
+    // Check if sender is valid funding source for this service
+    if (isFundingSource(from, to, ev.block, txHash)) {
+      let usd = value.toBigDecimal()
+        .times(getUsdcUsd(ev.block))
+        .div(BigDecimal.fromString("1e6"))
+      
+      log.info("FUNDING: IN {} USDC to {} from {}", [
+        usd.toString(),
+        to.toHexString(),
+        from.toHexString()
+      ])
+      
+      updateFunding(to, usd, true, ev.block.timestamp)
+    }
   }
   
-  if (!toIsSafe) {
-    toIsFundingSource = isFundingSource(to, ev.block, txHash)
-  }
-  
-  // USDC in to Safe (from funding source to Safe)
-  if (fromIsFundingSource && toIsSafe) {
-    let usd = value.toBigDecimal()
-      .times(getUsdcUsd(ev.block))
-      .div(BigDecimal.fromString("1e6"))
-    updateFunding(to, usd, true, ev.block.timestamp)
-  } 
-  // USDC out from Safe (from Safe to funding source)
-  else if (fromIsSafe && toIsFundingSource) {
-    let usd = value.toBigDecimal()
-      .times(getUsdcUsd(ev.block))
-      .div(BigDecimal.fromString("1e6"))
-    updateFunding(from, usd, false, ev.block.timestamp)
+  // Case 2: Transfer FROM service safe
+  if (fromService != null) {
+    // Check if receiver is valid funding source for this service
+    if (isFundingSource(to, from, ev.block, txHash)) {
+      let usd = value.toBigDecimal()
+        .times(getUsdcUsd(ev.block))
+        .div(BigDecimal.fromString("1e6"))
+      
+      log.info("FUNDING: OUT {} USDC from {} to {}", [
+        usd.toString(),
+        from.toHexString(),
+        to.toHexString()
+      ])
+      
+      updateFunding(from, usd, false, ev.block.timestamp)
+    }
   }
 }

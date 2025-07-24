@@ -10,7 +10,7 @@ import { getUsd, refreshPortfolio }   from "./common"
 import { addAgentNFTToPool, removeAgentNFTFromPool, getCachedPoolAddress, cachePoolAddress } from "./poolIndexCache"
 import { getTokenPriceUSD } from "./priceDiscovery"
 import { VELO_MANAGER, VELO_FACTORY } from "./constants"
-import { isValidAgent } from "./config"
+import { isServiceAgent } from "./config"
 
 // Helper function to get token decimals
 function getTokenDecimals(tokenAddress: Address): i32 {
@@ -163,9 +163,9 @@ export function refreshVeloCLPositionWithEventAmounts(
     nftOwner.toHexString()
   ])
 
-  // AGENT FILTERING: Only process positions owned by our Safe
-  if (!isValidAgent(nftOwner)) {
-    log.info("VELODROME: Skipping position {} - not owned by agent (owner: {})", [
+  // AGENT FILTERING: Only process positions owned by a service
+  if (!isServiceAgent(nftOwner)) {
+    log.info("VELODROME: Skipping position {} - not owned by a service (owner: {})", [
       tokenId.toString(),
       nftOwner.toHexString()
     ])
@@ -320,9 +320,9 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
   
   const nftOwner = ownerResult.value
 
-  // AGENT FILTERING: Only process positions owned by our Safe
-  if (!isValidAgent(nftOwner)) {
-    log.info("VELODROME: Skipping position {} - not owned by agent (owner: {})", [
+  // AGENT FILTERING: Only process positions owned by a service
+  if (!isServiceAgent(nftOwner)) {
+    log.info("VELODROME: Skipping position {} - not owned by a service (owner: {})", [
       tokenId.toString(),
       nftOwner.toHexString()
     ])

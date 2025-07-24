@@ -1,7 +1,36 @@
-type Agent @entity(immutable: false) {
-  id: Bytes!
-  name: String
-  createdBlock: BigInt
+# Service discovery entities
+type Service @entity(immutable: false) {
+  id: Bytes!                          # Service safe address
+  serviceId: BigInt!
+  operatorSafe: Bytes!
+  serviceSafe: Bytes!
+  
+  latestRegistrationBlock: BigInt!
+  latestRegistrationTimestamp: BigInt!
+  latestRegistrationTxHash: Bytes!
+  
+  latestMultisigBlock: BigInt!
+  latestMultisigTimestamp: BigInt!
+  latestMultisigTxHash: Bytes!
+  
+  isActive: Boolean!
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+type ServiceRegistration @entity(immutable: false) {
+  id: Bytes!                          # serviceId as string
+  serviceId: BigInt!
+  operatorSafe: Bytes!
+  registrationBlock: BigInt!
+  registrationTimestamp: BigInt!
+  registrationTxHash: Bytes!
+}
+
+type ServiceIndex @entity(immutable: false) {
+  id: Bytes!                          # serviceId as string
+  serviceId: BigInt!
+  currentServiceSafe: Bytes!          # Points to current Service entity
 }
 
 type AddressType @entity(immutable: false) {
@@ -12,6 +41,7 @@ type AddressType @entity(immutable: false) {
 
 type FundingBalance @entity(immutable: false) {
   id: Bytes!
+  service: Service              # Link to service
   totalInUsd: BigDecimal!
   totalOutUsd: BigDecimal!
   netUsd: BigDecimal!
@@ -22,6 +52,7 @@ type FundingBalance @entity(immutable: false) {
 type ProtocolPosition @entity(immutable: false) {
   id: Bytes!                # "<agent>-<tokenId>"
   agent: Bytes!             @index
+  service: Service          # Link to service
   protocol: String!         @index   # "velodrome-cl"
   pool: Bytes!
   

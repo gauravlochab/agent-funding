@@ -1,45 +1,19 @@
 import { Address, BigDecimal, ethereum, log } from "@graphprotocol/graph-ts"
 import { AggregatorV3Interface } from "../generated/Safe/AggregatorV3Interface"
-import { AddressType } from "../generated/schema"
+import { AddressType, Service } from "../generated/schema"
 import { 
-  SAFE_ADDRESS, 
-  SAFE_ADDRESS_HEX, 
-  TREASURY_ADDRESSES,
   USDC_NATIVE,
   USDC_BRIDGED,
   ETH_USD_FEED,
-  USDC_USD_FEED
+  USDC_USD_FEED,
+  getServiceByAgent
 } from "./config"
 import { getTokenPriceUSD } from "./priceDiscovery"
-
-// — Whitelist & tokens (now imported from config)
-export const WHITELIST: string[] = TREASURY_ADDRESSES
 
 export const FUNDING_TOKENS: Address[] = [
   USDC_NATIVE, // Native USDC on Optimism
   USDC_BRIDGED  // USDC.e (Bridged) on Optimism
 ]
-
-// 🚀 PERFORMANCE OPTIMIZATION: Ultra-fast Safe address check
-export function isSafeQuick(addr: Address): boolean {
-  return addr.toHexString().toLowerCase() == SAFE_ADDRESS_HEX
-}
-
-export function isWhitelisted(addr: Address, txHash: string = ""): boolean {
-  // Convert address to checksum format for proper comparison
-  let checksumAddr = addr.toHexString()
-  let result = false
-  
-  // Check against whitelist with case-insensitive comparison
-  for (let i = 0; i < WHITELIST.length; i++) {
-    if (checksumAddr.toLowerCase() == WHITELIST[i].toLowerCase()) {
-      result = true
-      break
-    }
-  }
-  
-  return result
-}
 
 export function isEOA(addr: Address, block: ethereum.Block, txHash: string = ""): boolean {
   // Use the official Graph Protocol method to check if address has code
@@ -74,19 +48,27 @@ export function isEOACached(addr: Address, block: ethereum.Block, txHash: string
   return isEOA
 }
 
-export function isFundingSource(addr: Address, block: ethereum.Block, txHash: string = ""): boolean {
-  let whitelisted = isWhitelisted(addr, txHash)
-  let eoa = isEOACached(addr, block, txHash) // 🚀 Using cached version for performance
-  let result = whitelisted || eoa
-  return result
+// Updated funding source check - now service-specific
+export function isFundingSource(
+  addr: Address, 
+  serviceSafe: Address,
+  block: ethereum.Block, 
+  txHash: string = ""
+): boolean {
+  // Get the service
+  let service = getServiceByAgent(serviceSafe)
+  if (service == null) return false
+  
+  // Check if address is this service's operator or an EOA
+  let isOperator = addr.equals(Address.fromBytes(service.operatorSafe))
+  let eoa = isEOACached(addr, block, txHash)
+  
+  return isOperator || eoa
 }
 
+// Legacy isSafe function - now checks if address is any service safe
 export function isSafe(addr: Address, txHash: string = ""): boolean {
-  let addrHex = addr.toHexString().toLowerCase()
-  let safeHex = SAFE_ADDRESS.toHexString().toLowerCase()
-  let result = addrHex == safeHex
-  
-  return result
+  return getServiceByAgent(addr) !== null
 }
 
 function fetchFeedUsd(feed: Address): BigDecimal {

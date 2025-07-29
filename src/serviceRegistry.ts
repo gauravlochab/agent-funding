@@ -7,6 +7,7 @@ import {
   ServiceRegistration, 
   ServiceIndex
 } from "../generated/schema"
+import { Safe } from "../generated/templates"
 import { BigInt, Bytes, store, log } from "@graphprotocol/graph-ts"
 
 const OPTIMUS_AGENT_ID = BigInt.fromI32(40)
@@ -169,6 +170,12 @@ export function handleCreateMultisigWithAgents(event: CreateMultisigWithAgents):
   ])
   
   log.info("SERVICE DISCOVERY: Service entity saved successfully - can now track funding and positions for safe: {}", [
+    multisig.toHexString()
+  ])
+  
+  // Create Safe datasource instance to track ETH transfers
+  Safe.create(multisig)
+  log.info("SERVICE DISCOVERY: Created Safe datasource instance for tracking ETH transfers to: {}", [
     multisig.toHexString()
   ])
   

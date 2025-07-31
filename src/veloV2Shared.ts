@@ -7,11 +7,12 @@ import {
   log
 } from "@graphprotocol/graph-ts"
 
-import { ProtocolPosition } from "../generated/schema"
+import { ProtocolPosition, Service } from "../generated/schema"
 import { VelodromeV2Pool } from "../generated/templates/VeloV2Pool/VelodromeV2Pool"
 import { VeloV2Pool as VeloV2PoolTemplate } from "../generated/templates"
 import { getTokenPriceUSD } from "./priceDiscovery"
 import { getServiceByAgent } from "./config"
+import { updateFirstTradingTimestamp } from "./helpers"
 
 // VelodromeV2 Router address on Optimism
 const VELODROME_V2_ROUTER = Address.fromString("0xa062ae8a9c5e11aaa026fc2670b0d65ccc8b2858")
@@ -120,10 +121,29 @@ export function refreshVeloV2PositionWithEventAmounts(
   if (!pp) {
     pp = new ProtocolPosition(positionId)
     pp.agent = userAddress
+    pp.service = userAddress // Link to service
     pp.protocol = "velodrome-v2"
     pp.pool = poolAddress
     pp.isActive = true
     pp.tokenId = BigInt.zero() // VelodromeV2 doesn't use tokenIds
+    
+    // Update service positionIds array
+    let serviceEntity = Service.load(userAddress)
+    if (serviceEntity != null) {
+      if (serviceEntity.positionIds == null) {
+        serviceEntity.positionIds = []
+      }
+      let positionIds = serviceEntity.positionIds
+      let positionIdString = positionId.toHexString()
+      if (positionIds.indexOf(positionIdString) == -1) {
+        positionIds.push(positionIdString)
+        serviceEntity.positionIds = positionIds
+        serviceEntity.save()
+      }
+      
+      // Update first trading timestamp
+      updateFirstTradingTimestamp(userAddress, block.timestamp)
+    }
     
     // Initialize all required fields
     pp.usdCurrent = BigDecimal.zero()
@@ -280,10 +300,29 @@ export function refreshVeloV2Position(
     // Create a new position if it doesn't exist
     pp = new ProtocolPosition(positionId)
     pp.agent = userAddress
+    pp.service = userAddress // Link to service
     pp.protocol = "velodrome-v2"
     pp.pool = poolAddress
     pp.isActive = true
     pp.tokenId = BigInt.zero() // VelodromeV2 doesn't use tokenIds
+    
+    // Update service positionIds array
+    let serviceEntity = Service.load(userAddress)
+    if (serviceEntity != null) {
+      if (serviceEntity.positionIds == null) {
+        serviceEntity.positionIds = []
+      }
+      let positionIds = serviceEntity.positionIds
+      let positionIdString = positionId.toHexString()
+      if (positionIds.indexOf(positionIdString) == -1) {
+        positionIds.push(positionIdString)
+        serviceEntity.positionIds = positionIds
+        serviceEntity.save()
+      }
+      
+      // Update first trading timestamp
+      updateFirstTradingTimestamp(userAddress, block.timestamp)
+    }
     
     // Initialize all required fields
     pp.usdCurrent = BigDecimal.zero()

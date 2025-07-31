@@ -4,6 +4,7 @@ import { Transfer as TransferEvent } from "../generated/USDC_Native/ERC20"
 import { TOKENS } from "./tokenConfig"
 import { getServiceByAgent } from "./config"
 import { isFundingSource } from "./common"
+import { getTokenPriceUSD } from "./priceDiscovery"
 
 // Calculate the total USD value of uninvested funds (tokens held in the safe)
 export function calculateUninvestedValue(serviceSafe: Address): BigDecimal {
@@ -85,10 +86,9 @@ export function updateETHBalance(
     }
   }
   
-  // Update USD value (would need price oracle integration)
-  // For now, we'll need to get ETH price from somewhere
-  // This is a placeholder - you'll need to integrate with your price discovery
-  balance.balanceUSD = balance.balance.times(BigDecimal.fromString("3000")) // Placeholder ETH price
+  // Update USD value using price discovery
+  let ethPrice = getTokenPriceUSD(Address.fromString("0x4200000000000000000000000000000000000006"), block.timestamp, false) // WETH address
+  balance.balanceUSD = balance.balance.times(ethPrice)
   
   balance.lastUpdated = block.timestamp
   balance.lastBlock = block.number
@@ -148,9 +148,9 @@ export function updateTokenBalance(
     }
   }
   
-  // Update USD value (would need price oracle integration)
-  // This is a placeholder - you'll need to integrate with your price discovery
-  balance.balanceUSD = balance.balance // Placeholder 1:1 for stablecoins
+  // Update USD value using price discovery
+  let tokenPrice = getTokenPriceUSD(tokenAddress, block.timestamp, false)
+  balance.balanceUSD = balance.balance.times(tokenPrice)
   
   balance.lastUpdated = block.timestamp
   balance.lastBlock = block.number
@@ -184,10 +184,11 @@ export function handleERC20Transfer(event: TransferEvent): void {
     
     // Check if it's a funding deposit
     if (isFundingSource(from, to, event.block, event.transaction.hash.toHexString())) {
-      // Calculate USD value (placeholder - needs price discovery integration)
+      // Calculate USD value using price discovery
       let divisor = BigInt.fromI32(10).pow(tokenConfig.decimals as u8)
       let amountDecimal = value.toBigDecimal().div(divisor.toBigDecimal())
-      let usdValue = amountDecimal // Placeholder 1:1 for stablecoins
+      let tokenPrice = getTokenPriceUSD(tokenAddress, event.block.timestamp, false)
+      let usdValue = amountDecimal.times(tokenPrice)
       
       log.info("FUNDING: IN {} USD ({}) to {} from {}", [
         usdValue.toString(),
@@ -209,7 +210,8 @@ export function handleERC20Transfer(event: TransferEvent): void {
     // Calculate USD value for funding tracking
     let divisor = BigInt.fromI32(10).pow(tokenConfig.decimals as u8)
     let amountDecimal = value.toBigDecimal().div(divisor.toBigDecimal())
-    let usdValue = amountDecimal // Placeholder 1:1 for stablecoins
+    let tokenPrice = getTokenPriceUSD(tokenAddress, event.block.timestamp, false)
+    let usdValue = amountDecimal.times(tokenPrice)
     
     log.info("FUNDING: OUT {} USD ({}) from {} to {}", [
       usdValue.toString(),

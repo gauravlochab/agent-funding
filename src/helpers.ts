@@ -219,15 +219,25 @@ function calculatePositionsValue(serviceSafe: Address): BigDecimal {
   log.info("PORTFOLIO: Calculating value for {} positions", [positionIds.length.toString()])
   
   for (let i = 0; i < positionIds.length; i++) {
-    let position = ProtocolPosition.load(Bytes.fromHexString(positionIds[i]))
+    // Position IDs are stored as strings, convert to Bytes
+    let positionId = Bytes.fromUTF8(positionIds[i])
+    let position = ProtocolPosition.load(positionId)
     
     if (position != null && position.isActive) {
       totalValue = totalValue.plus(position.usdCurrent)
-      log.info("PORTFOLIO: Position {} - Protocol: {}, Value: {} USD", [
+      log.info("PORTFOLIO: Position {} - Protocol: {}, Value: {} USD, Active: {}", [
         positionIds[i],
         position.protocol,
-        position.usdCurrent.toString()
+        position.usdCurrent.toString(),
+        position.isActive.toString()
       ])
+    } else if (position != null) {
+      log.info("PORTFOLIO: Position {} - Protocol: {}, INACTIVE", [
+        positionIds[i],
+        position.protocol
+      ])
+    } else {
+      log.warning("PORTFOLIO: Position {} not found!", [positionIds[i]])
     }
   }
   
@@ -251,7 +261,9 @@ function countPositions(serviceSafe: Address): PositionCounts {
   // Iterate through all position IDs
   let positionIds = service.positionIds
   for (let i = 0; i < positionIds.length; i++) {
-    let position = ProtocolPosition.load(Bytes.fromHexString(positionIds[i]))
+    // Position IDs are stored as strings, convert to Bytes
+    let positionId = Bytes.fromUTF8(positionIds[i])
+    let position = ProtocolPosition.load(positionId)
     
     if (position != null) {
       if (position.isActive) {

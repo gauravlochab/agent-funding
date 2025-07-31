@@ -5,12 +5,13 @@ import { VelodromeCLFactory }         from "../generated/VeloNFTManager/Velodrom
 import { VeloCLPool }                 from "../generated/templates"
 import { LiquidityAmounts }           from "./libraries/LiquidityAmounts"
 import { TickMath }                   from "./libraries/TickMath"
-import { ProtocolPosition }           from "../generated/schema"
+import { ProtocolPosition, Service }  from "../generated/schema"
 import { getUsd, refreshPortfolio }   from "./common"
 import { addAgentNFTToPool, removeAgentNFTFromPool, getCachedPoolAddress, cachePoolAddress } from "./poolIndexCache"
 import { getTokenPriceUSD } from "./priceDiscovery"
 import { VELO_MANAGER, VELO_FACTORY } from "./constants"
-import { isServiceAgent } from "./config"
+import { isServiceAgent, getServiceByAgent } from "./config"
+import { updateFirstTradingTimestamp } from "./helpers"
 
 // Helper function to get token decimals
 function getTokenDecimals(tokenAddress: Address): i32 {
@@ -222,10 +223,26 @@ export function refreshVeloCLPositionWithEventAmounts(
   if (pp == null) {
     pp = new ProtocolPosition(id)
     pp.agent = nftOwner
+    pp.service = nftOwner // Link to service
     pp.protocol = "velodrome-cl"
     pp.pool = poolAddress
     pp.tokenId = tokenId
     pp.isActive = true
+    
+    // Update service positionIds array
+    let service = Service.load(nftOwner)
+    if (service != null) {
+      if (service.positionIds == null) {
+        service.positionIds = []
+      }
+      let positionIds = service.positionIds
+      positionIds.push(idString)
+      service.positionIds = positionIds
+      service.save()
+      
+      // Update first trading timestamp
+      updateFirstTradingTimestamp(nftOwner, block.timestamp)
+    }
     
     // Set static position metadata
     pp.tickLower = data.value5 as i32
@@ -404,10 +421,26 @@ export function refreshVeloCLPosition(tokenId: BigInt, block: ethereum.Block, tx
   if (pp == null) {
     pp = new ProtocolPosition(id)
     pp.agent    = nftOwner
+    pp.service  = nftOwner // Link to service
     pp.protocol = "velodrome-cl"
     pp.pool     = poolAddress
     pp.tokenId  = tokenId
     pp.isActive = true
+    
+    // Update service positionIds array
+    let service = Service.load(nftOwner)
+    if (service != null) {
+      if (service.positionIds == null) {
+        service.positionIds = []
+      }
+      let positionIds = service.positionIds
+      positionIds.push(idString)
+      service.positionIds = positionIds
+      service.save()
+      
+      // Update first trading timestamp
+      updateFirstTradingTimestamp(nftOwner, block.timestamp)
+    }
     
     // Set static position metadata (required fields)
     pp.tickLower = tickLower

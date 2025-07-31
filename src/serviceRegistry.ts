@@ -79,6 +79,12 @@ export function handleRegisterInstance(event: RegisterInstance): void {
       service.latestRegistrationTimestamp = event.block.timestamp
       service.latestRegistrationTxHash = event.transaction.hash
       service.updatedAt = event.block.timestamp
+      
+      // Ensure positionIds is initialized (for backward compatibility)
+      if (service.positionIds == null) {
+        service.positionIds = []
+      }
+      
       service.save()
     }
   }
@@ -129,6 +135,12 @@ export function handleCreateMultisigWithAgents(event: CreateMultisigWithAgents):
         oldService.serviceSafe.toHexString()
       ])
       oldService.isActive = false
+      
+      // Ensure positionIds is initialized (for backward compatibility)
+      if (oldService.positionIds == null) {
+        oldService.positionIds = []
+      }
+      
       oldService.save()
     }
   } else {
@@ -142,6 +154,9 @@ export function handleCreateMultisigWithAgents(event: CreateMultisigWithAgents):
   service.serviceId = serviceId
   service.operatorSafe = registration.operatorSafe
   service.serviceSafe = multisig
+  
+  // Initialize positionIds as empty array
+  service.positionIds = []
   
   // Set registration data
   service.latestRegistrationBlock = registration.registrationBlock

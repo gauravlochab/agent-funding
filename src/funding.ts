@@ -6,6 +6,10 @@ import {
 } from "./common"
 import { getServiceByAgent } from "./config"
 import { updateFunding } from "./helpers"
+import { handleERC20Transfer } from "./tokenBalances"
+
+// Re-export handleERC20Transfer from tokenBalances
+export { handleERC20Transfer } from "./tokenBalances"
 
 // USDC Transfer - Dynamic multi-service version
 export function handleUSDC(ev: Transfer): void {
@@ -61,4 +65,7 @@ export function handleUSDC(ev: Transfer): void {
       updateFunding(from, usd, false, ev.block.timestamp)
     }
   }
+  
+  // Also update token balances for USDC
+  handleERC20Transfer(ev)
 }

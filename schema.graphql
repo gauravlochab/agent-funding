@@ -16,6 +16,13 @@ type Service @entity(immutable: false) {
   isActive: Boolean!
   createdAt: BigInt!
   updatedAt: BigInt!
+  
+  # Token balance tracking
+  balances: [TokenBalance!]! @derivedFrom(field: "service")
+  
+  # Position tracking
+  positions: [ProtocolPosition!]! @derivedFrom(field: "service")
+  positionIds: [String!]!             # Array of position IDs for iteration
 }
 
 type ServiceRegistration @entity(immutable: false) {
@@ -129,4 +136,66 @@ type PriceUpdate @entity(immutable: true) {
   confidence: BigDecimal!
   timestamp: BigInt!
   block: BigInt!
+}
+
+# Portfolio tracking entities
+type AgentPortfolio @entity(immutable: false) {
+  id: Bytes!                    # Service safe address
+  service: Service!             # Link to service
+  
+  # Portfolio Values
+  finalValue: BigDecimal!       # Total current value (positions + uninvested)
+  initialValue: BigDecimal!     # Initial investment from FundingBalance
+  positionsValue: BigDecimal!   # Current value of all active positions
+  uninvestedValue: BigDecimal!  # Token balances in safe
+  
+  # Performance Metrics
+  roi: BigDecimal!              # Return on Investment (%)
+  apr: BigDecimal!              # Annualized Percentage Return (%)
+  
+  # Timing
+  firstTradingTimestamp: BigInt! # When first position was created
+  lastUpdated: BigInt!          # Last portfolio update timestamp
+  
+  # Metadata
+  totalPositions: Int!          # Count of active positions
+  totalClosedPositions: Int!    # Count of closed positions
+}
+
+type AgentPortfolioSnapshot @entity(immutable: true) {
+  id: Bytes!                    # "<serviceSafe>-<timestamp>"
+  service: Service!             # Link to service
+  portfolio: AgentPortfolio!    # Link to main portfolio
+  
+  # Snapshot Values
+  finalValue: BigDecimal!       
+  initialValue: BigDecimal!     
+  positionsValue: BigDecimal!   
+  uninvestedValue: BigDecimal!  
+  
+  # Performance at Snapshot
+  roi: BigDecimal!              
+  apr: BigDecimal!              
+  
+  # Metadata
+  timestamp: BigInt!            # When snapshot was taken
+  block: BigInt!                # Block number
+  totalPositions: Int!          
+  totalClosedPositions: Int!    
+}
+
+type TokenBalance @entity(immutable: false) {
+  id: Bytes!                    # "<serviceSafe>-<token>"
+  service: Service!             # Link to service
+  token: Bytes!                 # Token address
+  symbol: String!               # Token symbol
+  decimals: Int!                # Token decimals
+  
+  # Balance Data
+  balance: BigDecimal!          # Token amount
+  balanceUSD: BigDecimal!       # USD value
+  
+  # Metadata
+  lastUpdated: BigInt!          # Last update timestamp
+  lastBlock: BigInt!            # Last update block
 }

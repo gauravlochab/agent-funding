@@ -1,0 +1,260 @@
+AGENT FUNDING SUBGRAPH - ENTITIES DOCUMENTATION
+==============================================
+
+EXISTING ENTITIES
+-----------------
+
+1. Service
+   Description: Represents a service agent with its safe addresses and registration details
+   
+   type Service @entity(immutable: false) {
+     id: Bytes!                          # Service safe address
+     serviceId: BigInt!
+     operatorSafe: Bytes!
+     serviceSafe: Bytes!
+     
+     latestRegistrationBlock: BigInt!
+     latestRegistrationTimestamp: BigInt!
+     latestRegistrationTxHash: Bytes!
+     
+     latestMultisigBlock: BigInt!
+     latestMultisigTimestamp: BigInt!
+     latestMultisigTxHash: Bytes!
+     
+     isActive: Boolean!
+     createdAt: BigInt!
+     updatedAt: BigInt!
+   }
+
+2. ServiceRegistration
+   Description: Historical record of service registrations on the blockchain
+   
+   type ServiceRegistration @entity(immutable: false) {
+     id: Bytes!                          # serviceId as string
+     serviceId: BigInt!
+     operatorSafe: Bytes!
+     registrationBlock: BigInt!
+     registrationTimestamp: BigInt!
+     registrationTxHash: Bytes!
+   }
+
+3. ServiceIndex
+   Description: Index mapping service IDs to their current service safe addresses
+   
+   type ServiceIndex @entity(immutable: false) {
+     id: Bytes!                          # serviceId as string
+     serviceId: BigInt!
+     currentServiceSafe: Bytes!          # Points to current Service entity
+   }
+
+4. AddressType
+   Description: Cache for storing whether an address is a contract or EOA
+   
+   type AddressType @entity(immutable: false) {
+     id: Bytes!           # The address itself
+     isContract: Boolean! # true = contract, false = EOA
+     checkedAt: BigInt!   # Block number when first checked
+   }
+
+5. FundingBalance
+   Description: Tracks funding flows in and out of service safes in USD
+   
+   type FundingBalance @entity(immutable: false) {
+     id: Bytes!
+     service: Service              # Link to service
+     totalInUsd: BigDecimal!
+     totalOutUsd: BigDecimal!
+     netUsd: BigDecimal!
+     firstInTimestamp: BigInt!
+     lastChangeTs: BigInt!
+   }
+
+6. ProtocolPosition
+   Description: Represents liquidity positions in various DeFi protocols
+   
+   type ProtocolPosition @entity(immutable: false) {
+     id: Bytes!                # "<agent>-<tokenId>"
+     agent: Bytes!             @index
+     service: Service          # Link to service
+     protocol: String!         @index   # "velodrome-cl"
+     pool: Bytes!
+     
+     # Position status
+     isActive: Boolean!        # true = open, false = closed
+     
+     # Current state (only updated for active positions)
+     usdCurrent: BigDecimal!   # Total USD value
+     token0: Bytes
+     token0Symbol: String      # Token0 symbol (e.g., "USDC")
+     amount0: BigDecimal       # Current token0 amount
+     amount0USD: BigDecimal!   # Current USD value of token0
+     token1: Bytes
+     token1Symbol: String      # Token1 symbol (e.g., "DAI")
+     amount1: BigDecimal       # Current token1 amount  
+     amount1USD: BigDecimal!   # Current USD value of token1
+     liquidity: BigInt
+     
+     # Velodrome-specific
+     tokenId: BigInt!          # NFT token ID
+     
+     # Static position metadata (cached to avoid RPC calls)
+     tickLower: Int!           # Lower tick boundary (never changes)
+     tickUpper: Int!           # Upper tick boundary (never changes)
+     tickSpacing: Int          # Tick spacing for the pool (never changes) - used by Velodrome CL
+     fee: Int                  # Fee tier for the pool (never changes) - used by Uniswap V3
+     
+     # Entry tracking
+     entryTxHash: Bytes!       # Transaction hash when position opened
+     entryTimestamp: BigInt!   # Block timestamp when opened
+     entryAmount0: BigDecimal! # Initial token0 amount
+     entryAmount0USD: BigDecimal! # Initial USD value of token0
+     entryAmount1: BigDecimal! # Initial token1 amount
+     entryAmount1USD: BigDecimal! # Initial USD value of token1
+     entryAmountUSD: BigDecimal! # Total initial USD value
+     
+     # Exit tracking (set when position closes)
+     exitTxHash: Bytes         # Transaction hash when position closed
+     exitTimestamp: BigInt     # Block timestamp when closed
+     exitAmount0: BigDecimal   # Final token0 amount withdrawn
+     exitAmount0USD: BigDecimal # Final USD value of token0 at closure
+     exitAmount1: BigDecimal   # Final token1 amount withdrawn
+     exitAmount1USD: BigDecimal # Final USD value of token1 at closure
+     exitAmountUSD: BigDecimal # Total final USD value at closure
+   }
+
+7. PriceSource
+   Description: Defines price feed sources for tokens
+   
+   type PriceSource @entity(immutable: false) {
+     id: Bytes!                    # pool/oracle address
+     token: Token!
+     sourceType: String!           # "chainlink", "curve_3pool", "uniswap_v3", "velodrome_v2"
+     priority: Int!                # 1 = highest priority
+     isActive: Boolean!
+     lastUpdate: BigInt!
+     lastPrice: BigDecimal!
+     confidence: BigDecimal!       # 0-1 confidence score
+   }
+
+8. Token
+   Description: Token metadata and pricing information
+   
+   type Token @entity(immutable: false) {
+     id: Bytes!                    # token address
+     symbol: String!
+     name: String!
+     decimals: BigInt!
+     derivedUSD: BigDecimal!       # Current best price
+     priceSources: [PriceSource!]! # Hardcoded price sources
+     lastPriceUpdate: BigInt!
+     priceConfidence: BigDecimal!  # Current price confidence level
+   }
+
+9. PriceUpdate
+   Description: Immutable historical record of token price updates
+   
+   type PriceUpdate @entity(immutable: true) {
+     id: Bytes!                    # tx hash + timestamp
+     token: Token!
+     priceUSD: BigDecimal!
+     source: PriceSource!
+     confidence: BigDecimal!
+     timestamp: BigInt!
+     block: BigInt!
+   }
+
+
+NEW ENTITIES TO BE ADDED
+------------------------
+
+10. AgentPortfolio
+    Description: Current portfolio state for each agent showing total value and performance
+    
+    type AgentPortfolio @entity(immutable: false) {
+      id: Bytes!                    # Agent address (service safe)
+      agent: Bytes!                 # Agent address  
+      service: Service!             # Link to service
+      
+      # Portfolio Values
+      finalValue: BigDecimal!       # Total current value (positions + uninvested)
+      initialValue: BigDecimal!     # Initial investment from FundingBalance
+      positionsValue: BigDecimal!   # Current value of all active positions
+      uninvestedValue: BigDecimal!  # Token balances in safe
+      
+      # Performance Metrics
+      roi: BigDecimal!              # Return on Investment (%)
+      apr: BigDecimal!              # Annualized Percentage Return (%)
+      
+      # Timing
+      firstTradingTimestamp: BigInt! # When first position was created
+      lastUpdated: BigInt!          # Last portfolio update timestamp
+      
+      # Metadata
+      totalPositions: Int!          # Count of active positions
+      totalClosedPositions: Int!    # Count of closed positions
+    }
+
+11. AgentPortfolioSnapshot
+    Description: Historical snapshots of portfolio performance taken at regular intervals
+    
+    type AgentPortfolioSnapshot @entity(immutable: true) {
+      id: Bytes!                    # "<agent>-<timestamp>"
+      agent: Bytes!                 # Agent address
+      portfolio: AgentPortfolio!    # Link to main portfolio
+      
+      # Snapshot Values
+      finalValue: BigDecimal!       
+      initialValue: BigDecimal!     
+      positionsValue: BigDecimal!   
+      uninvestedValue: BigDecimal!  
+      
+      # Performance at Snapshot
+      roi: BigDecimal!              
+      apr: BigDecimal!              
+      
+      # Metadata
+      timestamp: BigInt!            # When snapshot was taken
+      block: BigInt!                # Block number
+      totalPositions: Int!          
+      totalClosedPositions: Int!    
+    }
+
+12. TokenBalance
+    Description: Tracks individual token balances held in agent safes
+    
+    type TokenBalance @entity(immutable: false) {
+      id: Bytes!                    # "<agent>-<token>"
+      agent: Bytes!                 # Agent address
+      service: Service!             # Link to service
+      token: Bytes!                 # Token address
+      symbol: String!               # Token symbol
+      decimals: Int!                # Token decimals
+      
+      # Balance Data
+      balance: BigDecimal!          # Token amount
+      balanceUSD: BigDecimal!       # USD value
+      
+      # Metadata
+      lastUpdated: BigInt!          # Last update timestamp
+      lastBlock: BigInt!            # Last update block
+    }
+
+
+KEY CALCULATIONS
+----------------
+
+1. Final Portfolio Value
+   finalValue = Sum(ProtocolPosition.usdCurrent where isActive=true) + Sum(TokenBalance.balanceUSD)
+
+2. Initial Investment Value
+   initialValue = FundingBalance.netUsd
+
+3. Return on Investment (ROI)
+   roi = ((finalValue - initialValue) / initialValue) * 100
+
+4. Annual Percentage Rate (APR)
+   daysSinceFirstTrade = (currentTimestamp - firstTradingTimestamp) / 86400
+   apr = roi * (365 / daysSinceFirstTrade)
+
+5. Uninvested Funds
+   uninvestedValue = Sum(TokenBalance.balanceUSD for all tokens in safe)

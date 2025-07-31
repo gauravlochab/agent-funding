@@ -9,6 +9,7 @@ import {
   getServiceByAgent
 } from "./config"
 import { getTokenPriceUSD } from "./priceDiscovery"
+import { calculatePortfolioMetrics } from "./helpers"
 
 export const FUNDING_TOKENS: Address[] = [
   USDC_NATIVE, // Native USDC on Optimism
@@ -91,12 +92,7 @@ export function getUsd(token: Address, block: ethereum.Block): BigDecimal {
   return getTokenPriceUSD(token, block.timestamp, false)
 }
 
-// Portfolio refresh function - placeholder for now
+// Portfolio refresh function
 export function refreshPortfolio(agent: Address, block: ethereum.Block): void {
-  // This would aggregate all protocol positions for an agent
-  // In a full implementation, this would:
-  // 1. Load all ProtocolPosition entities for this agent
-  // 2. Sum up the USD values by protocol
-  // 3. Update an AgentPortfolio entity
-  // 4. Save the aggregated data
+  calculatePortfolioMetrics(agent, block)
 }

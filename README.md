@@ -1,155 +1,278 @@
 # Agent Funding Subgraph
 
-A Graph Protocol subgraph for tracking agent funding activities on blockchain networks. This subgraph indexes Safe wallet transactions, ERC20 token transfers, and price feed data to provide comprehensive analytics for agent funding operations.
+A comprehensive blockchain indexing system that tracks and analyzes DeFi activities of autonomous agents (Optimus agents) on the Optimism network.
+
+**🔗 Subgraph URL**: https://api.studio.thegraph.com/query/96360/agent-funding/version/latest
 
 ## Overview
 
-This subgraph monitors:
-- Safe wallet transactions and executions
-- ERC20 token transfers (USDC Native and Bridged)
-- Price feed updates from Chainlink aggregators
-- Funding events and agent activities
+This subgraph provides real-time tracking and analytics for AI agents operating in DeFi protocols, including funding flows, position management, portfolio performance, and OLAS staking rewards.
 
-## Features
+## Business Logic
 
-- **Safe Wallet Tracking**: Monitor Safe wallet creations, transactions, and executions
-- **Token Transfer Monitoring**: Track ERC20 token movements for funding analysis
-- **Price Feed Integration**: Real-time price data from Chainlink oracles
-- **Agent Funding Analytics**: Comprehensive data for agent funding patterns
+### 🤖 Service Discovery
+- Monitors ServiceRegistryL2 contract for new Optimus agent registrations (Agent ID 40)
+- Creates service entities when agents are registered and their multisig safes are deployed
+- Tracks the lifecycle of agent services (active/inactive status)
 
-## Schema
+### 💰 Funding Tracking
+- Monitors USDC transfers (both native and bridged) to/from agent safes
+- Validates funding sources (must be from operator addresses or EOA wallets)
+- Calculates net funding flows (total deposits - total withdrawals)
+- Tracks funding timeline and patterns
 
-The subgraph defines the following main entities:
-- `Safe`: Safe wallet information and metadata
-- `Transaction`: Safe transaction details
-- `TokenTransfer`: ERC20 token transfer events
-- `PriceFeed`: Price data from oracles
-- `Agent`: Agent-specific funding information
+### 🏦 Multi-Protocol Position Tracking
+- **Uniswap V3**: Concentrated liquidity positions via NFT manager
+- **Velodrome CL**: Concentrated liquidity positions via NFT manager  
+- **Velodrome V2**: Traditional AMM pool positions
+- Real-time position valuation using on-chain price oracles
 
-## Deployment
+### 🎯 OLAS Rewards Integration
+- Tracks OLAS token rewards from staking activities
+- Converts OLAS rewards to USD using price oracles
+- Integrates rewards into overall portfolio calculations
 
-### Prerequisites
+### 📊 Portfolio Analytics
+- Calculates comprehensive portfolio metrics in real-time
+- Computes ROI, APR, and performance indicators
+- Tracks uninvested funds (token balances in safes)
+- Creates historical snapshots for trend analysis
 
-- Node.js (v16 or higher)
-- Yarn package manager
-- Graph CLI
+## Core Entities
 
-### Installation
+### 🔧 Service
+**Central entity representing an autonomous agent**
+- `id`: Agent's safe address
+- `serviceId`: Unique service identifier from registry
+- `operatorSafe`: Address of the operator controlling the agent
+- `serviceSafe`: Address of the agent's multisig safe
+- `isActive`: Whether the service is currently active
+- `positionIds`: Array of position IDs for tracking
 
-```bash
-# Install dependencies
-yarn install
+### 💵 FundingBalance
+**Tracks all funding flows for an agent**
+- `id`: Agent's safe address
+- `totalInUsd`: Total USD deposited to the agent
+- `totalOutUsd`: Total USD withdrawn from the agent
+- `netUsd`: Net funding (totalIn - totalOut)
+- `firstInTimestamp`: When first funding was received
+- `lastChangeTs`: Last funding activity timestamp
 
-# Generate types
-yarn codegen
+### 🎯 ProtocolPosition
+**Represents individual DeFi positions across protocols**
+- `id`: Unique position identifier ("<agent>-<tokenId>")
+- `agent`: Agent's safe address
+- `protocol`: Protocol name ("uniswap-v3", "velodrome-cl", "velodrome-v2")
+- `tokenId`: NFT token ID for the position
+- `isActive`: Whether position is currently open
+- `usdCurrent`: Current USD value of the position
+- `token0Symbol`/`token1Symbol`: Token pair symbols
+- `amount0USD`/`amount1USD`: Current USD values of each token
+- `entryAmountUSD`: Initial investment amount
+- `exitAmountUSD`: Final value when position closed
 
-# Build the subgraph
-yarn build
-```
+### 📈 AgentPortfolio
+**Aggregated portfolio metrics and performance analysis**
+- `id`: Agent's safe address
+- `initialValue`: Total initial investment from funding
+- `finalValue`: Current total portfolio value
+- `positionsValue`: Current value of all active positions
+- `uninvestedValue`: Value of tokens held in safe (not in positions)
+- `olasRewardsValue`: USD value of OLAS rewards earned
+- `roi`: Return on Investment percentage
+- `apr`: Annualized Percentage Return
+- `totalPositions`: Count of active positions
+- `totalClosedPositions`: Count of closed positions
 
-### Local Deployment
+### 🪙 TokenBalance
+**Tracks token balances held in agent safes**
+- `id`: "<serviceSafe>-<token>"
+- `token`: Token contract address
+- `symbol`: Token symbol (e.g., "USDC", "DAI")
+- `balance`: Token amount held
+- `balanceUSD`: USD value of the balance
+- `lastUpdated`: Last update timestamp
 
-```bash
-# Create local subgraph
-yarn create-local
+### 🎁 OlasRewards
+**Tracks OLAS staking rewards for agents**
+- `id`: Agent's safe address
+- `currentOlasStaked`: Current OLAS amount staked
+- `olasRewardsEarned`: Total OLAS rewards earned (cumulative)
+- `olasRewardsEarnedUSD`: USD value of total rewards
+- `lastRewardTimestamp`: Last reward distribution timestamp
+- `averageOlasPrice`: Running average OLAS price for USD calculations
 
-# Deploy to local Graph Node
-yarn deploy-local
-```
+## Sample Queries
 
-### Studio Deployment
-
-```bash
-# Deploy to Graph Studio
-yarn deploy
-```
-
-## Configuration
-
-The subgraph is configured in `subgraph.yaml` with:
-- Network: Base (can be configured for other networks)
-- Contract addresses for Safe, USDC tokens, and price feeds
-- Event handlers for monitoring blockchain events
-
-## Development
-
-### File Structure
-
-```
-├── abis/                   # Contract ABIs
-├── src/                    # TypeScript source files
-│   ├── common.ts          # Common utilities
-│   ├── funding.ts         # Funding event handlers
-│   ├── helpers.ts         # Helper functions
-│   └── safe.ts            # Safe wallet handlers
-├── schema.graphql         # GraphQL schema definition
-├── subgraph.yaml          # Subgraph configuration
-└── package.json           # Dependencies and scripts
-```
-
-### Adding New Event Handlers
-
-1. Update the GraphQL schema in `schema.graphql`
-2. Add event handlers in the appropriate TypeScript files
-3. Update `subgraph.yaml` to include new data sources
-4. Run `yarn codegen` to generate types
-5. Build and deploy
-
-## Queries
-
-Example queries you can run against this subgraph:
-
-### Get Safe Wallets
+### 📋 Get Complete Agent Data
 ```graphql
 {
-  safes(first: 10) {
-    id
-    address
-    owners
-    threshold
-    createdAt
+  service(id: "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9") {
+    serviceId
+    isActive
+    operatorSafe
+    balances {
+      symbol
+      balance
+      balanceUSD
+    }
+  }
+  
+  fundingBalance(id: "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9") {
+    totalInUsd
+    totalOutUsd
+    netUsd
+    firstInTimestamp
+  }
+  
+  agentPortfolio(id: "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9") {
+    initialValue
+    finalValue
+    positionsValue
+    uninvestedValue
+    olasRewardsValue
+    roi
+    apr
+    totalPositions
   }
 }
 ```
 
-### Get Token Transfers
+### 🎯 Get All Active Positions for an Agent
 ```graphql
 {
-  tokenTransfers(first: 10, orderBy: timestamp, orderDirection: desc) {
+  protocolPositions(where: { 
+    agent: "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9",
+    isActive: true 
+  }) {
     id
-    from
-    to
-    amount
-    token
-    timestamp
+    protocol
+    tokenId
+    usdCurrent
+    token0Symbol
+    token1Symbol
+    amount0USD
+    amount1USD
+    entryAmountUSD
   }
 }
 ```
 
-### Get Price Feed Data
+### 📊 Get Portfolio Performance for Multiple Agents
 ```graphql
 {
-  priceFeeds(first: 5) {
+  agentPortfolios(where: {
+    id_in: [
+      "0x8ed5ae443fbb1a36e364ac154887f3150669702a",
+      "0xe4eaf37b1726634935f679a8f3e00ec2e4e650a0",
+      "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9"
+    ]
+  }) {
     id
-    price
-    timestamp
-    aggregator
+    initialValue
+    finalValue
+    roi
+    apr
+    totalPositions
+    lastUpdated
   }
 }
 ```
 
-## Contributing
+### 🎁 Get OLAS Rewards for an Agent
+```graphql
+{
+  olasRewards(id: "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9") {
+    currentOlasStaked
+    olasRewardsEarned
+    olasRewardsEarnedUSD
+    lastRewardTimestamp
+    averageOlasPrice
+  }
+}
+```
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+### 🔍 Get All Services Overview
+```graphql
+{
+  services(where: { isActive: true }) {
+    id
+    serviceId
+    operatorSafe
+    serviceSafe
+    positionIds
+  }
+}
+```
 
-## License
+### 💰 Get Funding Overview for All Agents
+```graphql
+{
+  fundingBalances(orderBy: netUsd, orderDirection: desc) {
+    id
+    totalInUsd
+    totalOutUsd
+    netUsd
+    firstInTimestamp
+  }
+}
+```
 
-This project is licensed under UNLICENSED.
+## Key Features
 
-## Support
+- ⚡ **Real-time Tracking**: Portfolio values update with every blockchain transaction
+- 🔗 **Multi-Protocol Support**: Tracks positions across Uniswap V3, Velodrome CL, and Velodrome V2
+- 📈 **Comprehensive Analytics**: ROI, APR, and performance metrics calculated automatically
+- 🎁 **OLAS Integration**: Includes staking rewards in portfolio calculations
+- 💲 **Price Discovery**: Uses Chainlink oracles and DEX pools for accurate USD valuations
+- 📸 **Historical Data**: Portfolio snapshots for trend analysis
+- 🚀 **Production Ready**: Currently tracking live Optimus agents on Optimism
 
-For questions or support, please open an issue in the GitHub repository.
+## Usage Notes
+
+- All addresses should be lowercase in queries
+- Use `fundingBalance` as a separate entity, not a field on Service
+- The `agent` field on ProtocolPosition is an address, not a relation
+- Portfolio metrics are automatically recalculated on every position or funding change
+- OLAS rewards are included in the total portfolio value calculations
+
+## Architecture
+
+```
+Service Registry → Service Discovery → Agent Tracking
+     ↓
+USDC Transfers → Funding Tracking → Portfolio Updates
+     ↓
+DeFi Protocols → Position Tracking → Real-time Valuation
+     ↓
+OLAS Staking → Rewards Tracking → Portfolio Integration
+     ↓
+Price Oracles → USD Conversion → Analytics & Metrics
+```
+
+## Supported Protocols
+
+| Protocol | Type | Features |
+|----------|------|----------|
+| Uniswap V3 | Concentrated Liquidity | NFT positions, fee collection, liquidity management |
+| Velodrome CL | Concentrated Liquidity | NFT positions, fee collection, liquidity management |
+| Velodrome V2 | AMM | LP tokens, pool shares, rewards |
+| OLAS Staking | Rewards | Staking rewards, USD conversion |
+
+## Getting Started
+
+1. **Access the Subgraph**: Use the GraphQL endpoint above
+2. **Explore Entities**: Start with `services` to see all tracked agents
+3. **Check Funding**: Query `fundingBalances` for investment flows
+4. **Analyze Positions**: Use `protocolPositions` for DeFi activities
+5. **Review Performance**: Query `agentPortfolios` for metrics
+
+## Subgraph Access
+
+**GraphQL Endpoint**: https://api.studio.thegraph.com/query/96360/agent-funding/version/latest
+
+You can use this endpoint with any GraphQL client or directly in the Graph Explorer to query agent data, portfolio metrics, and DeFi positions.
+
+---
+
+*Built with The Graph Protocol for tracking autonomous agent DeFi activities on Optimism*

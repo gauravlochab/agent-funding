@@ -13,11 +13,24 @@ import { calculatePortfolioMetrics } from "./helpers"
  * @param event Checkpoint event from StakingProxy
  */
 export function handleOlasCheckpoint(event: Checkpoint): void {
-  log.info("OLAS_REWARDS: Checkpoint event at block {} - epoch: {}, {} services", [
+  log.info("🎯 OLAS_REWARDS: ========== CHECKPOINT EVENT DETECTED ==========", [])
+  log.info("🎯 OLAS_REWARDS: Block: {}, Tx: {}", [
     event.block.number.toString(),
+    event.transaction.hash.toHexString()
+  ])
+  log.info("🎯 OLAS_REWARDS: Epoch: {}, Available Rewards: {}, Services Count: {}", [
     event.params.epoch.toString(),
+    event.params.availableRewards.toString(),
     event.params.serviceIds.length.toString()
   ])
+  
+  // Log all service IDs in this checkpoint
+  for (let i = 0; i < event.params.serviceIds.length; i++) {
+    log.info("🎯 OLAS_REWARDS: Service ID {} - Reward: {}", [
+      event.params.serviceIds[i].toString(),
+      event.params.rewards[i].toString()
+    ])
+  }
   
   // Extract event parameters
   let epoch = event.params.epoch

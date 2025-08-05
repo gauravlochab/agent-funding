@@ -409,6 +409,35 @@ dataSources:
       eventHandlers:
         - event: PoolCreated(indexed address,indexed address,indexed bool,address,uint256)
           handler: handleVeloV2PoolCreated
+  # OLAS StakingProxy data source for tracking OLAS rewards
+  - kind: ethereum/contract
+    name: OlasStakingProxy
+    network: optimism
+    source:
+      address: "0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8"
+      abi: StakingProxy
+      startBlock: 136774000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - OlasRewards
+        - Service
+        - AgentPortfolio
+      abis:
+        - name: StakingProxy
+          file: ./abis/StakingProxy.json
+        - name: AggregatorV3Interface
+          file: ./abis/AggregatorV3Interface.json
+      eventHandlers:
+        - event: Checkpoint(uint256,uint256,uint256[],uint256[],uint256)
+          handler: handleOlasCheckpoint
+        - event: ServiceStaked(uint256,indexed uint256,indexed address,indexed address,uint256[])
+          handler: handleOlasServiceStaked  
+        - event: ServiceUnstaked(uint256,indexed uint256,indexed address,indexed address,uint256[],uint256,uint256)
+          handler: handleOlasServiceUnstaked
+      file: ./src/olasRewards.ts
 templates:
   - kind: ethereum/contract
     name: VeloCLPool

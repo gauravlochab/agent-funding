@@ -148,14 +148,24 @@ The funding balance calculates `totalInUsd - totalOutUsd = netUsd` because of th
 
 ### Events Tracked
 
-#### USDC Transfers (Native & Bridged)
-**Contracts**: 
+#### USDC Transfers (Native Only)
+**Contract**: 
 - USDC Native: `0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85`
-- USDC Bridged: `0x7F5c764cBc14f9669B88837ca1490cCa17c31607`
 
 **`Transfer(indexed address,indexed address,uint256)`**  
-**What it does**: Emitted for all USDC transfers on Optimism network.  
+**What it does**: Emitted for all Native USDC transfers on Optimism network.  
 **Our logic**: We validate that transfers come from legitimate funding sources (operator addresses or EOA wallets only), then update the `FundingBalance` entity with running totals and trigger portfolio recalculation.
+
+#### ETH Transfers to Agent Safes
+**GitHub**: [`src/safe.ts`](../src/safe.ts)
+
+**`SafeReceived(indexed address,uint256)`**  
+**What it does**: Emitted when ETH is sent directly to agent safe contracts.  
+**Our logic**: We validate the sender is a legitimate funding source (operator or EOA), convert ETH to USD using current ETH price, then update the `FundingBalance` entity and trigger portfolio recalculation.
+
+**`ExecutionSuccess(bytes32,uint256)`**  
+**What it does**: Emitted when safe executes transactions, potentially including ETH outflows.  
+**Our logic**: Currently logged for monitoring purposes. Future implementation will analyze executed transactions to detect ETH transfers back to operators and update funding balances accordingly.
 
 ### Funding Source Validation
 ```typescript

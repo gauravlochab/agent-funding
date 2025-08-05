@@ -8,99 +8,66 @@ A comprehensive blockchain indexing system that tracks and analyzes DeFi activit
 
 This subgraph provides real-time tracking and analytics for AI agents operating in DeFi protocols, including funding flows, position management, portfolio performance, and OLAS staking rewards.
 
-## Business Logic
+## Quick Start
 
-### 🤖 Service Discovery
-- Monitors ServiceRegistryL2 contract for new Optimus agent registrations (Agent ID 40)
-- Creates service entities when agents are registered and their multisig safes are deployed
-- Tracks the lifecycle of agent services (active/inactive status)
+### Basic Agent Query
+```graphql
+{
+  service(id: "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9") {
+    serviceId
+    isActive
+    operatorSafe
+  }
+  
+  agentPortfolio(id: "0x9f3abfc3301093f39c2a137f87c525b4a0832ba9") {
+    finalValue
+    roi
+    apr
+    totalPositions
+  }
+}
+```
 
-### 💰 Funding Tracking
-- Monitors USDC transfers (both native and bridged) to/from agent safes
-- Validates funding sources (must be from operator addresses or EOA wallets)
-- Calculates net funding flows (total deposits - total withdrawals)
-- Tracks funding timeline and patterns
+### Get All Active Agents
+```graphql
+{
+  services(where: { isActive: true }) {
+    id
+    serviceId
+    operatorSafe
+  }
+}
+```
 
-### 🏦 Multi-Protocol Position Tracking
-- **Uniswap V3**: Concentrated liquidity positions via NFT manager
-- **Velodrome CL**: Concentrated liquidity positions via NFT manager  
-- **Velodrome V2**: Traditional AMM pool positions
-- Real-time position valuation using on-chain price oracles
+## What This Subgraph Tracks
 
-### 🎯 OLAS Rewards Integration
-- Tracks OLAS token rewards from staking activities
-- Converts OLAS rewards to USD using price oracles
-- Integrates rewards into overall portfolio calculations
-
-### 📊 Portfolio Analytics
-- Calculates comprehensive portfolio metrics in real-time
-- Computes ROI, APR, and performance indicators
-- Tracks uninvested funds (token balances in safes)
-- Creates historical snapshots for trend analysis
+- 🤖 **Agent Registration**: Service discovery from ServiceRegistryL2
+- 💰 **Funding Flows**: USDC deposits/withdrawals to agent safes
+- 🏦 **DeFi Positions**: Uniswap V3, Velodrome CL, Velodrome V2
+- 🎁 **OLAS Rewards**: Staking rewards from OLAS protocol
+- 📊 **Portfolio Metrics**: ROI, APR, performance analytics
+- 💲 **Price Discovery**: Multi-source USD pricing (Chainlink, DEX pools)
 
 ## Core Entities
 
-### 🔧 Service
-**Central entity representing an autonomous agent**
-- `id`: Agent's safe address
-- `serviceId`: Unique service identifier from registry
-- `operatorSafe`: Address of the operator controlling the agent
-- `serviceSafe`: Address of the agent's multisig safe
-- `isActive`: Whether the service is currently active
-- `positionIds`: Array of position IDs for tracking
+### Main Entities
+- **🔧 Service** - Central agent entity with safe addresses and metadata
+- **💵 FundingBalance** - Tracks USDC deposits/withdrawals (handles re-funding bug)
+- **🎯 ProtocolPosition** - Individual DeFi positions across protocols
+- **📈 AgentPortfolio** - Portfolio metrics (ROI, APR, total value)
+- **🏦 TokenBalance** - Token holdings in agent safes
+- **🎁 OlasRewards** - OLAS staking rewards tracking
 
-### 💵 FundingBalance
-**Tracks all funding flows for an agent**
-- `id`: Agent's safe address
-- `totalInUsd`: Total USD deposited to the agent
-- `totalOutUsd`: Total USD withdrawn from the agent
-- `netUsd`: Net funding (totalIn - totalOut)
-- `firstInTimestamp`: When first funding was received
-- `lastChangeTs`: Last funding activity timestamp
+### Supporting Entities
+- **📝 ServiceRegistration** - Agent registration events
+- **🔗 ServiceIndex** - Service ID to safe address mapping
+- **🏠 AddressType** - EOA vs Contract address caching
+- **💲 PriceSource** - Price oracle sources and confidence
+- **🪙 Token** - Token metadata and USD pricing
+- **📊 PriceUpdate** - Historical price records
+- **📸 AgentPortfolioSnapshot** - Portfolio snapshots for trends
 
-### 🎯 ProtocolPosition
-**Represents individual DeFi positions across protocols**
-- `id`: Unique position identifier ("<agent>-<tokenId>")
-- `agent`: Agent's safe address
-- `protocol`: Protocol name ("uniswap-v3", "velodrome-cl", "velodrome-v2")
-- `tokenId`: NFT token ID for the position
-- `isActive`: Whether position is currently open
-- `usdCurrent`: Current USD value of the position
-- `token0Symbol`/`token1Symbol`: Token pair symbols
-- `amount0USD`/`amount1USD`: Current USD values of each token
-- `entryAmountUSD`: Initial investment amount
-- `exitAmountUSD`: Final value when position closed
-
-### 📈 AgentPortfolio
-**Aggregated portfolio metrics and performance analysis**
-- `id`: Agent's safe address
-- `initialValue`: Total initial investment from funding
-- `finalValue`: Current total portfolio value
-- `positionsValue`: Current value of all active positions
-- `uninvestedValue`: Value of tokens held in safe (not in positions)
-- `olasRewardsValue`: USD value of OLAS rewards earned
-- `roi`: Return on Investment percentage
-- `apr`: Annualized Percentage Return
-- `totalPositions`: Count of active positions
-- `totalClosedPositions`: Count of closed positions
-
-### 🪙 TokenBalance
-**Tracks token balances held in agent safes**
-- `id`: "<serviceSafe>-<token>"
-- `token`: Token contract address
-- `symbol`: Token symbol (e.g., "USDC", "DAI")
-- `balance`: Token amount held
-- `balanceUSD`: USD value of the balance
-- `lastUpdated`: Last update timestamp
-
-### 🎁 OlasRewards
-**Tracks OLAS staking rewards for agents**
-- `id`: Agent's safe address
-- `currentOlasStaked`: Current OLAS amount staked
-- `olasRewardsEarned`: Total OLAS rewards earned (cumulative)
-- `olasRewardsEarnedUSD`: USD value of total rewards
-- `lastRewardTimestamp`: Last reward distribution timestamp
-- `averageOlasPrice`: Running average OLAS price for USD calculations
+> **📖 For detailed entity schemas and field descriptions, see [Technical Documentation](docs/technical-documentation.md)**
 
 ## Sample Queries
 

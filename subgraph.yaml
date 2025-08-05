@@ -505,3 +505,30 @@ templates:
         - event: ExecutionSuccess(bytes32,uint256)
           handler: handleExecutionSuccess
       file: ./src/safe.ts
+  # OLAS StakingProxy template for tracking OLAS rewards
+  - kind: ethereum/contract
+    name: StakingProxy
+    network: optimism
+    source:
+      abi: StakingProxy
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - OlasRewards
+        - Service
+        - AgentPortfolio
+      abis:
+        - name: StakingProxy
+          file: ./abis/StakingProxy.json
+        - name: AggregatorV3Interface
+          file: ./abis/AggregatorV3Interface.json
+      eventHandlers:
+        - event: Checkpoint(uint256,uint256,uint256[],uint256[],uint256)
+          handler: handleOlasCheckpoint
+        - event: ServiceStaked(uint256,indexed uint256,indexed address,indexed address,uint256[])
+          handler: handleOlasServiceStaked  
+        - event: ServiceUnstaked(uint256,indexed uint256,indexed address,indexed address,uint256[],uint256,uint256)
+          handler: handleOlasServiceUnstaked
+      file: ./src/olasRewards.ts

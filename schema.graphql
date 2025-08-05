@@ -148,6 +148,7 @@ type AgentPortfolio @entity(immutable: false) {
   initialValue: BigDecimal!     # Initial investment from FundingBalance
   positionsValue: BigDecimal!   # Current value of all active positions
   uninvestedValue: BigDecimal!  # Token balances in safe
+  olasRewardsValue: BigDecimal! # USD value of OLAS rewards
   
   # Performance Metrics
   roi: BigDecimal!              # Return on Investment (%)
@@ -198,4 +199,20 @@ type TokenBalance @entity(immutable: false) {
   # Metadata
   lastUpdated: BigInt!          # Last update timestamp
   lastBlock: BigInt!            # Last update block
+}
+
+type OlasRewards @entity(immutable: false) {
+  id: Bytes!                    # Service safe address (same as Service.id)
+  service: Service!             # Link to service
+  
+  # OLAS Tracking
+  currentOlasStaked: BigInt!    # Current OLAS staked amount
+  olasRewardsEarned: BigInt!    # Total OLAS rewards earned (cumulative, in wei)
+  olasRewardsEarnedUSD: BigDecimal! # USD value of total rewards
+  
+  # Metadata
+  lastRewardTimestamp: BigInt!  # Last reward update
+  lastRewardBlock: BigInt!      # Last reward block
+  lastPriceUpdate: BigInt!      # Last USD price update
+  averageOlasPrice: BigDecimal! # Running average price for better USD accuracy
 }

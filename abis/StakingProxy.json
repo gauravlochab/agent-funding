@@ -1,0 +1,40 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": false, "internalType": "uint256", "name": "epoch", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "availableRewards", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256[]", "name": "serviceIds", "type": "uint256[]"},
+      {"indexed": false, "internalType": "uint256[]", "name": "rewards", "type": "uint256[]"},
+      {"indexed": false, "internalType": "uint256", "name": "epochLength", "type": "uint256"}
+    ],
+    "name": "Checkpoint",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": false, "internalType": "uint256", "name": "epoch", "type": "uint256"},
+      {"indexed": true, "internalType": "uint256", "name": "serviceId", "type": "uint256"},
+      {"indexed": true, "internalType": "address", "name": "owner", "type": "address"},
+      {"indexed": true, "internalType": "address", "name": "multisig", "type": "address"},
+      {"indexed": false, "internalType": "uint256[]", "name": "nonces", "type": "uint256[]"}
+    ],
+    "name": "ServiceStaked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": false, "internalType": "uint256", "name": "epoch", "type": "uint256"},
+      {"indexed": true, "internalType": "uint256", "name": "serviceId", "type": "uint256"},
+      {"indexed": true, "internalType": "address", "name": "owner", "type": "address"},
+      {"indexed": true, "internalType": "address", "name": "multisig", "type": "address"},
+      {"indexed": false, "internalType": "uint256[]", "name": "nonces", "type": "uint256[]"},
+      {"indexed": false, "internalType": "uint256", "name": "reward", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "availableRewards", "type": "uint256"}
+    ],
+    "name": "ServiceUnstaked",
+    "type": "event"
+  }
+]

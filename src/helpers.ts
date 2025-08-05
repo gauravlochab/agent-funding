@@ -4,7 +4,8 @@ import {
   AgentPortfolio, 
   AgentPortfolioSnapshot,
   ProtocolPosition,
-  Service 
+  Service,
+  OlasRewards
 } from "../generated/schema"
 import { calculateUninvestedValue } from "./tokenBalances"
 import { getServiceByAgent } from "./config"
@@ -120,12 +121,24 @@ export function calculatePortfolioMetrics(
   let uninvestedValue = calculateUninvestedValue(serviceSafe)
   log.info("PORTFOLIO: Uninvested funds value: {} USD", [uninvestedValue.toString()])
   
-  // 4. Calculate total portfolio value
-  let finalValue = positionsValue.plus(uninvestedValue)
-  log.info("PORTFOLIO: Final portfolio value: {} USD (positions: {} + uninvested: {})", [
+  // 4. NEW: Calculate OLAS rewards value
+  let olasRewardsValue = BigDecimal.zero()
+  let olasRewards = OlasRewards.load(serviceSafe as Bytes)
+  if (olasRewards !== null) {
+    olasRewardsValue = olasRewards.olasRewardsEarnedUSD
+    log.info("PORTFOLIO: OLAS rewards - {} OLAS = {} USD", [
+      olasRewards.olasRewardsEarned.toString(),
+      olasRewardsValue.toString()
+    ])
+  }
+  
+  // 5. Calculate total portfolio value INCLUDING OLAS rewards
+  let finalValue = positionsValue.plus(uninvestedValue).plus(olasRewardsValue)
+  log.info("PORTFOLIO: Final portfolio value: {} USD (positions: {} + uninvested: {} + OLAS: {})", [
     finalValue.toString(),
     positionsValue.toString(),
-    uninvestedValue.toString()
+    uninvestedValue.toString(),
+    olasRewardsValue.toString()
   ])
   
   // 5. Calculate ROI and APR
@@ -175,6 +188,7 @@ export function calculatePortfolioMetrics(
   portfolio.initialValue = initialValue  
   portfolio.positionsValue = positionsValue
   portfolio.uninvestedValue = uninvestedValue
+  portfolio.olasRewardsValue = olasRewardsValue  // ADD THIS LINE
   portfolio.roi = roi
   portfolio.apr = apr
   portfolio.lastUpdated = block.timestamp

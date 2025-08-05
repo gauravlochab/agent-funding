@@ -16,6 +16,10 @@ export const USDC_USD_FEED = Address.fromString("0x16a9FA2FDa030272Ce99B29CF780d
 // Other contract addresses
 export const VELO_NFT_MANAGER = Address.fromString("0x416b433906b1B72FA758e166e239c43d68dC6F29")
 
+// OLAS-related addresses
+export const OLAS_TOKEN = Address.fromString("0xFC2E6e6BCbd49ccf3A5f029c79984372DcBFE527")
+export const STAKING_FACTORY = Address.fromString("0xa45E64d13A30a51b91ae0eb182e88a40e9b18eD8")
+
 // Service lookup functions
 export function getServiceByAgent(address: Address): Service | null {
   return Service.load(address)
